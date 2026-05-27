@@ -1,0 +1,39 @@
+{
+  "name": "@worldframe/sdk",
+  "version": "0.1.0",
+  "description": "The WorldFrame SDK — TypeScript infrastructure for building autonomous worlds on Somnia.",
+  "author": "REVERIE",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:package": "npm run build && mkdir -p package && npm pack --pack-destination package",
+    "dev": "tsup --watch",
+    "check:selectors": "node scripts/check-selectors.mjs",
+    "check:abi": "node scripts/check-abi-drift.mjs",
+    "check:integration": "npm run check:selectors && npm run check:abi"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@somnia-chain/reactivity": "0.1.10",
+    "viem": "2.37.8",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "tsup": "8.3.5",
+    "typescript": "5.7.2"
+  }
+}

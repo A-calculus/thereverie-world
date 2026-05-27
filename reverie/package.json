@@ -1,0 +1,21 @@
+{
+  "name": "reverie",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:llm": "node test-llm-agent.mjs",
+    "test:json-api": "node test-json-api-agent.mjs",
+    "test:web-parse": "node test-web-parse-agent.mjs",
+    "test:native-methods": "node test-native-methods.mjs",
+    "deploy:world": "node deploy-world.mjs",
+    "test:chronicle": "node test-chronicle-agent.mjs",
+    "test:zone-climate": "node test-zone-climate-agent.mjs",
+    "test:faction-morale": "node test-faction-morale-agent.mjs",
+    "test:conflict": "node test-conflict-resolution-agent.mjs"
+  },
+  "dependencies": {
+    "@worldframe/sdk": "file:../sdk/package/worldframe-sdk-0.1.0.tgz",
+    "viem": "2.37.8"
+  }
+}

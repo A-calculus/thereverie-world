@@ -1,0 +1,143 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Root .gitignore for somnia-docs monorepo
+#
+# Projects:
+#   - contracts/     → Solidity (Hardhat)
+#   - sdk/           → TypeScript (tsup)
+#   - reverie/       → ESM test scripts (Node.js)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔐 ENVIRONMENT & SECRETS (all projects)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# .env files — NEVER commit private keys, RPC URLs, or addresses
+*.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+.env
+
+# Exception: .env.example files ARE committed as templates
+!.env.example
+
+# Private keys and wallet files
+*.pem
+*.key
+*.wallet
+*.keystore
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 📦 DEPENDENCIES (npm/yarn/pnpm)
+# ══════════════════════════════════════════════════════════════════════════════
+
+/node_modules
+**/node_modules/
+
+.pnp
+.pnp.js
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔨 SOLIDITY / HARDHAT (contracts/)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Compiled artifacts (Hardhat)
+contracts/artifacts/
+contracts/cache/
+
+# Debug info
+contracts/**/*.dbg.json
+
+# Hardhat local network files
+contracts/hardhat.config.ts.bak
+
+# Coverage
+contracts/coverage/
+contracts/coverage.json
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 📜 TYPESCRIPT / TSUP (sdk/)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Build output
+sdk/dist/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🧪 TEST OUTPUT (reverie/)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Test result files
+reverie/results.txt
+reverie/*.log
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🌐 NEXT.JS 
+# ══════════════════════════════════════════════════════════════════════════════
+
+/.next/
+/out/
+/build
+
+# Vercel
+.vercel
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🗑️ GENERAL / MISC
+# ══════════════════════════════════════════════════════════════════════════════
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Temp directories
+.temp/
+.tmp/
+tmp/
+
+# Coverage reports
+/coverage
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 📝 NOTES
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Each sub-project may also have its own .gitignore:
+#   - contracts/.gitignore  → Solidity-specific patterns
+#   - sdk/.gitignore        → SDK build artifacts
+#   - reverie/.gitignore    → Test output
+#
+# .env.example files are COMMITTED as documentation templates.
+# .env files are IGNORED everywhere — add your actual values there.
+
+
+Notes.md
+reverie_identity_1779525614801.png
+ProjectIdea.md
+Somnia-Docs*
+# ══════════════════════════════════════════════════════════════════════════════
