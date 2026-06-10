@@ -486,7 +486,8 @@ async function materializeTemplateAgents(params: {
       agentId: createdId,
       name: createdName,
       agentType: validAgentType(agent.agent_type),
-    });
+      sourceTemplateAgentId: localId,
+    } as WorldBuilderConfig['agentChain'][number]);
   }
 
   const builder = rewriteBuilderAgentRefs({ ...params.builder, agentChain: nextChain }, agentIdMap, agentNameMap);

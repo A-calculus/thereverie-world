@@ -15,5 +15,9 @@ export async function GET(req: NextRequest) {
     zoneId: 'public-demo-weather',
   });
 
-  return NextResponse.json(sample);
+  return NextResponse.json({
+    ...sample,
+    weather: sample,
+    source: 'static-json',
+  });
 }

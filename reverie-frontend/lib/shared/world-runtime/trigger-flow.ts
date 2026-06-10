@@ -26,6 +26,7 @@ interface TriggerFlowContext {
   inputs: Record<string, unknown>;
   worldState?: Record<string, unknown>;
   payload?: Record<string, unknown>;
+  baseUrl?: string | URL;
 }
 
 function now() {
@@ -192,6 +193,7 @@ export async function executeTriggerFlow(ctx: TriggerFlowContext): Promise<World
     publicState: ctx.worldState,
     fetchDataSources: true,
     resolutionSource: 'local_fallback_trigger',
+    baseUrl: ctx.baseUrl,
   });
   const runtimeBuilder = resolved.builder;
   const trigger = runtimeBuilder.triggers?.find((item) => item.id === ctx.trigger.id) ?? ctx.trigger;

@@ -177,6 +177,8 @@ export default function WorldStatePage() {
         dangerLevel: numberValue(live.dangerLevel, 0),
         faction: stringValue(live.faction, 'unassigned'),
         climate: stringValue(live.climate, 'not recorded'),
+        latestDecision: stringValue(live.latestDecision, 'pending'),
+        narrative: stringValue(live.narrative, 'No zone movement has been reconciled yet.'),
         active: live.active === undefined ? true : Boolean(live.active),
         allocationPercent: percentFromBps(live.allocationWeightBps ?? zone.allocationWeightBps),
       };
@@ -193,6 +195,7 @@ export default function WorldStatePage() {
         compiledId: stringValue(faction.factionId, stringValue(live.factionId)),
         name: stringValue(live.name, stringValue(faction.name, stringValue(faction.sourceId, 'Faction'))),
         morale: numberValue(live.morale, 0),
+        latestDecision: stringValue(live.latestDecision, 'pending'),
         narrative: stringValue(live.narrative, 'No narrative update has been reconciled yet.'),
         allocationPercent: percentFromBps(live.allocationWeightBps ?? faction.allocationWeightBps),
       };
@@ -368,6 +371,11 @@ export default function WorldStatePage() {
                     <span className="text-aurora text-xs text-right">{zone.climate}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
+                    <span className="text-text-muted">Latest decision</span>
+                    <span className="text-xs text-right break-words">{zone.latestDecision}</span>
+                  </div>
+                  <p className="text-xs text-text-muted leading-relaxed break-words">{zone.narrative}</p>
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-text-muted">Attached agents</span>
                     <span className="text-xs text-right">{(data.builder?.agentChain ?? []).filter((agent) => agent.zoneId === zone.sourceId).length}</span>
                   </div>
@@ -406,6 +414,7 @@ export default function WorldStatePage() {
                     />
                   </div>
                   <p className="text-xs text-text-muted leading-relaxed">{faction.narrative}</p>
+                  <p className="text-xs text-aurora break-words">Decision: {faction.latestDecision}</p>
                 </div>
               </div>
             ))}

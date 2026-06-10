@@ -1,4 +1,5 @@
 import type { WorldBuilderAgentStep, WorldBuilderConfig } from '@/lib/shared/types';
+import { builderTemplateSlug, CARGO_TEMPLATE_SLUG } from '@/lib/shared/cargo-template';
 
 type MutableStep = WorldBuilderAgentStep & Record<string, unknown>;
 
@@ -23,6 +24,15 @@ function has(key: string, ...needles: string[]) {
 }
 
 function sharedContextTemplate() {
+  return [
+    'Runtime inputs: {{runtime.inputs}}',
+    'Trigger payload: {{trigger.payload}}',
+    'Source value: {{source.value}}',
+    'Previous step result: {{previous.output}}',
+  ].join('\n');
+}
+
+function cargoContextTemplate() {
   return [
     'Runtime inputs: {{runtime.inputs}}',
     'Trigger payload: {{trigger.payload}}',
@@ -122,7 +132,11 @@ function enrichLlmStep(step: MutableStep, slug: string) {
   ];
   const instruction = instructions.find(([needles]) => has(key, ...needles))?.[1] ?? `Execute the ${step.name ?? step.id} step for ${slug}.`;
   step.systemPrompt = typeof step.systemPrompt === 'string' && step.systemPrompt.trim() ? step.systemPrompt : JSON_ONLY_SYSTEM;
-  step.contextTemplate = typeof step.contextTemplate === 'string' && step.contextTemplate.trim() ? step.contextTemplate : sharedContextTemplate();
+  step.contextTemplate = typeof step.contextTemplate === 'string' && step.contextTemplate.trim()
+    ? step.contextTemplate
+    : slug === 'cargo-climate-guard'
+      ? cargoContextTemplate()
+      : sharedContextTemplate();
   step.resultAlias = typeof step.resultAlias === 'string' && step.resultAlias.trim() ? step.resultAlias : `${String(step.id ?? slug)}Decision`;
   const current = typeof step.inputTemplate === 'string' ? step.inputTemplate : '';
   if (slug === 'cargo-climate-guard' || !current.startsWith('Task:')) step.inputTemplate = strictLlmPrompt(step, instruction);
@@ -136,7 +150,11 @@ function enrichCustomStep(step: MutableStep, slug: string) {
     : isChronicle
       ? 'You are the REVERIE Chronicle writer. Return one concise receipt-backed world history entry.'
       : CONCISE_SYSTEM;
-  step.contextTemplate = typeof step.contextTemplate === 'string' && step.contextTemplate.trim() ? step.contextTemplate : sharedContextTemplate();
+  step.contextTemplate = typeof step.contextTemplate === 'string' && step.contextTemplate.trim()
+    ? step.contextTemplate
+    : slug === 'cargo-climate-guard'
+      ? cargoContextTemplate()
+      : sharedContextTemplate();
   step.resultAlias = typeof step.resultAlias === 'string' && step.resultAlias.trim() ? step.resultAlias : `${String(step.id ?? slug)}Result`;
   if (isChronicle && !(typeof step.inputTemplate === 'string' && step.inputTemplate.startsWith('Write a concise Chronicle entry'))) {
     step.inputTemplate = [
@@ -156,12 +174,13 @@ export function applyLiveAgentStepDefaults(step: WorldBuilderAgentStep, slug = '
 }
 
 export function applyLiveBuilderAgentDefaults(builder: WorldBuilderConfig, slug = builder.uiSlug || 'custom'): WorldBuilderConfig {
-  if (slug === 'cargo-climate-guard' || builder.uiSlug === 'cargo-climate-guard') {
-    return applyCargoAutonomyDefaults(builder, slug);
+  const templateSlug = builderTemplateSlug(builder) || slug;
+  if (templateSlug === CARGO_TEMPLATE_SLUG) {
+    return applyCargoAutonomyDefaults(builder, templateSlug);
   }
   return {
     ...builder,
-    agentChain: (builder.agentChain ?? []).map((step) => applyLiveAgentStepDefaults(step, slug)),
+    agentChain: (builder.agentChain ?? []).map((step) => applyLiveAgentStepDefaults(step, templateSlug)),
   };
 }
 
@@ -182,7 +201,7 @@ function cargoStep(id: string, name: string, purpose: string): WorldBuilderAgent
     agentId: id,
     purpose,
     inputTemplate: purpose,
-    contextTemplate: sharedContextTemplate(),
+    contextTemplate: cargoContextTemplate(),
     resultAlias: `${id.replace(/-/g, '')}Result`,
     persistResult: true,
   };

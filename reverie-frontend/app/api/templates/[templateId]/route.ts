@@ -3,7 +3,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase-server';
 import { demoTemplates } from '@/lib/shared/demo-data';
 import { getServerSession } from '@/lib/server/session';
 import { ensureSupabaseUser, hasSupabaseAdminEnv } from '@/lib/server/supabase';
-import { ensureOfficialTemplatesSeeded, officialTemplateSlugs } from '@/lib/server/official-templates';
+import { ensureOfficialTemplatesSeeded, officialTemplateSlugs, mergeOfficialTemplateConfig } from '@/lib/server/official-templates';
 import type { WorldBuilderConfig } from '@/lib/shared/types';
 
 interface Params {
@@ -48,27 +48,28 @@ export async function GET(_req: NextRequest, { params }: Params) {
       .or(`id.eq.${templateId},slug.eq.${templateId}`)
       .maybeSingle();
     if (data) {
-      if (data.creator_id === null && !officialTemplateSlugs.has(data.slug)) {
+      const template = mergeOfficialTemplateConfig(data);
+      if (template.creator_id === null && !officialTemplateSlugs.has(template.slug)) {
         return NextResponse.json({ error: 'Template not found' }, { status: 404 });
       }
-      if (data.creator_id && data.creator_id !== userId && !data.is_public) {
+      if (template.creator_id && template.creator_id !== userId && !template.is_public) {
         return NextResponse.json({ error: 'Template not found' }, { status: 404 });
       }
       return NextResponse.json({
         template: {
-          id: data.id,
-          slug: data.slug,
-          name: data.name,
-          author: data.creator_id ? (data.creator_id === userId ? 'You' : 'Community Builder') : 'REVERIE Official',
-          downloads: String(data.download_count ?? 0),
-          tags: [data.category],
-          description: data.description ?? '',
+          id: template.id,
+          slug: template.slug,
+          name: template.name,
+          author: template.creator_id ? (template.creator_id === userId ? 'You' : 'Community Builder') : 'REVERIE Official',
+          downloads: String(template.download_count ?? 0),
+          tags: [template.category],
+          description: template.description ?? '',
           features: ['Configurable agents', 'Reusable world setup'],
-          category: data.category,
-          featured: data.featured,
-          isPublic: data.is_public,
-          isOwner: Boolean(userId && data.creator_id === userId),
-          overview: templateOverview(data.world_config),
+          category: template.category,
+          featured: template.featured,
+          isPublic: template.is_public,
+          isOwner: Boolean(userId && template.creator_id === userId),
+          overview: templateOverview(template.world_config),
         },
       });
     }

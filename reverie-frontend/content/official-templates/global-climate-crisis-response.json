@@ -1,0 +1,949 @@
+{
+  "uiSlug": "global-climate-crisis-response",
+  "displayName": "Global Climate Crisis Response",
+  "description": "Autonomous crisis-response world that checks fixed public weather feeds, classifies regional severity, updates response zones and agency factions, and records receipt-backed crisis movement.",
+  "version": "climate-crisis-response-v2",
+  "engine": "genericEventWorld",
+  "publicTypes": {
+    "ClimateSeverity": [
+      "STABLE",
+      "WATCH",
+      "WARNING",
+      "EMERGENCY"
+    ],
+    "ResponseDecision": [
+      "monitor",
+      "mobilize",
+      "escalate",
+      "stand_down"
+    ],
+    "inputs": [
+      "regionId",
+      "severityThreshold",
+      "drillScenario"
+    ]
+  },
+  "inputSchema": [
+    {
+      "id": "regionId",
+      "label": "Focus region",
+      "type": "select",
+      "required": true,
+      "defaultValue": "europe",
+      "options": [
+        {
+          "label": "Americas Zone",
+          "value": "americas"
+        },
+        {
+          "label": "Europe Zone",
+          "value": "europe"
+        },
+        {
+          "label": "Asia-Pacific Zone",
+          "value": "asia-pacific"
+        },
+        {
+          "label": "Africa / Middle East Zone",
+          "value": "africa-middle-east"
+        }
+      ]
+    },
+    {
+      "id": "severityThreshold",
+      "label": "Severity threshold",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2
+    },
+    {
+      "id": "drillScenario",
+      "label": "Manual drill scenario",
+      "type": "text",
+      "required": true,
+      "defaultValue": "Heavy rain and wind threaten transport corridors near London."
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "weatherAmericas",
+      "name": "Americas Weather Feed",
+      "type": "weather",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=40.7128&longitude=-74.0060&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "method": "GET"
+    },
+    {
+      "id": "weatherEurope",
+      "name": "Europe Weather Feed",
+      "type": "weather",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=51.5072&longitude=-0.1276&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "method": "GET"
+    },
+    {
+      "id": "weatherAsiaPacific",
+      "name": "Asia-Pacific Weather Feed",
+      "type": "weather",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=35.6762&longitude=139.6503&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "method": "GET"
+    },
+    {
+      "id": "weatherAfricaMiddleEast",
+      "name": "Africa / Middle East Weather Feed",
+      "type": "weather",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=25.2048&longitude=55.2708&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "method": "GET"
+    }
+  ],
+  "agentChain": [
+    {
+      "id": "weather-reader-americas",
+      "name": "Americas Weather Reader",
+      "agentType": "native_json_api",
+      "purpose": "Fetch current weather for the Americas response zone.",
+      "inputTemplate": "Read current Americas weather. Return only the selected current object.",
+      "urlTemplate": "https://api.open-meteo.com/v1/forecast?latitude=40.7128&longitude=-74.0060&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "selector": "current",
+      "resultAlias": "americasWeather",
+      "persistResult": true
+    },
+    {
+      "id": "weather-reader-europe",
+      "name": "Europe Weather Reader",
+      "agentType": "native_json_api",
+      "purpose": "Fetch current weather for the Europe response zone.",
+      "inputTemplate": "Read current Europe weather. Return only the selected current object.",
+      "urlTemplate": "https://api.open-meteo.com/v1/forecast?latitude=51.5072&longitude=-0.1276&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "selector": "current",
+      "resultAlias": "europeWeather",
+      "persistResult": true
+    },
+    {
+      "id": "weather-reader-asia-pacific",
+      "name": "Asia-Pacific Weather Reader",
+      "agentType": "native_json_api",
+      "purpose": "Fetch current weather for the Asia-Pacific response zone.",
+      "inputTemplate": "Read current Asia-Pacific weather. Return only the selected current object.",
+      "urlTemplate": "https://api.open-meteo.com/v1/forecast?latitude=35.6762&longitude=139.6503&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "selector": "current",
+      "resultAlias": "asiaPacificWeather",
+      "persistResult": true
+    },
+    {
+      "id": "weather-reader-africa-middle-east",
+      "name": "Africa / Middle East Weather Reader",
+      "agentType": "native_json_api",
+      "purpose": "Fetch current weather for the Africa / Middle East response zone.",
+      "inputTemplate": "Read current Africa / Middle East weather. Return only the selected current object.",
+      "urlTemplate": "https://api.open-meteo.com/v1/forecast?latitude=25.2048&longitude=55.2708&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "selector": "current",
+      "resultAlias": "africaMiddleEastWeather",
+      "persistResult": true
+    },
+    {
+      "id": "severity-assessor",
+      "name": "Severity Assessment Agent",
+      "agentType": "native_llm",
+      "purpose": "Classify crisis severity for all regional feeds and recommend response posture.",
+      "inputTemplate": "Task: classify the latest crisis severity for Americas, Europe, Asia-Pacific, and Africa / Middle East. Use the fixed weather feeds, threshold, trigger payload, and previous weather-reader outputs. Return compact JSON only with severityByRegion, focusRegion, latestSeverity, decision, confidence, summary, and nextAction.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nTrigger payload: {{trigger.payload}}\nAmericas feed: {{dataSources.weatherAmericas.body.current}}\nEurope feed: {{dataSources.weatherEurope.body.current}}\nAsia-Pacific feed: {{dataSources.weatherAsiaPacific.body.current}}\nAfrica / Middle East feed: {{dataSources.weatherAfricaMiddleEast.body.current}}\nPrevious step result: {{previous.output}}",
+      "systemPrompt": "You are the REVERIE Climate Severity Agent. Return only compact valid JSON with no markdown.",
+      "resultAlias": "severityAssessment",
+      "persistResult": true
+    },
+    {
+      "id": "zone-climate-update",
+      "name": "Zone Climate Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Convert severity assessment into visible zone-state movement.",
+      "inputTemplate": "Task: produce concise zone state updates from the severity assessment. Return compact JSON only with zoneUpdates keyed by americas, europe, asia-pacific, africa-middle-east; each value has climate, dangerLevel, latestDecision, and narrative.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nSeverity assessment: {{previous.output}}\nWeather feeds: {\"americas\":{{dataSources.weatherAmericas.body.current}},\"europe\":{{dataSources.weatherEurope.body.current}},\"asiaPacific\":{{dataSources.weatherAsiaPacific.body.current}},\"africaMiddleEast\":{{dataSources.weatherAfricaMiddleEast.body.current}}}",
+      "systemPrompt": "You are the REVERIE Zone Climate Agent. Return only compact valid JSON with no markdown.",
+      "resultAlias": "zoneClimateUpdates",
+      "persistResult": true
+    },
+    {
+      "id": "agency-readiness",
+      "name": "Agency Readiness Agent",
+      "agentType": "native_llm",
+      "purpose": "Update response agency morale and readiness posture.",
+      "inputTemplate": "Task: map the zone climate updates into agency readiness. Return compact JSON only with factionUpdates for government, ngo, private-sector, and insurance; each value has morale, latestDecision, and narrative.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nZone climate updates: {{previous.output}}\nSeverity threshold: {{runtime.inputs.severityThreshold}}",
+      "systemPrompt": "You are the REVERIE Agency Readiness Agent. Return only compact valid JSON with no markdown.",
+      "resultAlias": "agencyReadiness",
+      "persistResult": true
+    },
+    {
+      "id": "crisis-decision-router",
+      "name": "Crisis Decision Router",
+      "agentType": "native_llm",
+      "purpose": "Choose the autonomous continuation path from severity, zone, and agency readiness evidence.",
+      "inputTemplate": "Task: choose the next autonomous crisis response route. Return compact JSON only and make the first key decision. Allowed decision values are monitor, mobilize, escalate, stand_down. Use mobilize/escalate for WARNING or EMERGENCY posture, monitor for WATCH, and stand_down for STABLE.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nAgency readiness: {{previous.output}}\nSeverity assessment and feeds were provided by previous workflow steps.\nReturn exactly this JSON shape: {\"decision\":\"monitor|mobilize|escalate|stand_down\",\"latestSeverity\":\"STABLE|WATCH|WARNING|EMERGENCY\",\"focusRegion\":\"{{runtime.inputs.regionId}}\",\"summary\":\"...\",\"stateEffects\":{\"world\":\"...\",\"zones\":\"...\",\"factions\":\"...\"},\"nextAction\":\"continue|record|stop\"}",
+      "systemPrompt": "You are the REVERIE Climate Decision Router. Return only compact valid JSON with decision as the first key. No markdown.",
+      "resultAlias": "crisisDecision",
+      "persistResult": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "americas",
+      "name": "Americas Zone",
+      "description": "Hurricane, tornado, flood, heat, and transport risk across major western hemisphere cities.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "government",
+        "climate": "STABLE",
+        "narrative": "Americas monitoring initialized."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "europe",
+      "name": "Europe Zone",
+      "description": "Flood, heat wave, winter storm, and transport disruption risks.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "ngo",
+        "climate": "STABLE",
+        "narrative": "Europe monitoring initialized."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "asia-pacific",
+      "name": "Asia-Pacific Zone",
+      "description": "Typhoon, monsoon, extreme rain, and coastal infrastructure risks.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "private-sector",
+        "climate": "STABLE",
+        "narrative": "Asia-Pacific monitoring initialized."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "africa-middle-east",
+      "name": "Africa / Middle East Zone",
+      "description": "Drought, extreme heat, dust storm, and flood risks.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "insurance",
+        "climate": "STABLE",
+        "narrative": "Africa / Middle East monitoring initialized."
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "factions": [
+    {
+      "id": "government",
+      "name": "Government Faction",
+      "description": "Large resources with slower mobilization.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 50,
+        "narrative": "Government response capacity is initialized."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "ngo",
+      "name": "NGO Faction",
+      "description": "Fast response with limited capacity.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 50,
+        "narrative": "NGO field readiness is initialized."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "private-sector",
+      "name": "Private Sector Faction",
+      "description": "Logistics, equipment, and business continuity capacity.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 50,
+        "narrative": "Private sector logistics are initialized."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "insurance",
+      "name": "Insurance Faction",
+      "description": "Evidence review and ledger recommendation faction.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 50,
+        "narrative": "Insurance review desk is initialized."
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "triggers": [
+    {
+      "id": "scheduled-weather-check",
+      "name": "Scheduled Weather Check",
+      "type": "scheduled",
+      "sourceId": "weatherEurope",
+      "condition": {
+        "isStartTrigger": true
+      },
+      "sourceConfig": {
+        "kind": "schedule_time",
+        "path": "now",
+        "includeInAgentInput": true
+      },
+      "typeConfig": {
+        "cronExpression": "*/30 * * * *",
+        "timezone": "UTC",
+        "payloadTemplate": "{\n  \"mode\": \"scheduled_weather_scan\",\n  \"startedAt\": \"{{source.value}}\",\n  \"focusRegion\": \"{{runtime.inputs.regionId}}\",\n  \"severityThreshold\": \"{{runtime.inputs.severityThreshold}}\",\n  \"feeds\": {\n    \"americas\": {{dataSources.weatherAmericas.body.current}},\n    \"europe\": {{dataSources.weatherEurope.body.current}},\n    \"asiaPacific\": {{dataSources.weatherAsiaPacific.body.current}},\n    \"africaMiddleEast\": {{dataSources.weatherAfricaMiddleEast.body.current}}\n  }\n}"
+      },
+      "inputParser": "{\n  \"mode\": \"scheduled_weather_scan\",\n  \"focusRegion\": \"{{runtime.inputs.regionId}}\",\n  \"severityThreshold\": \"{{runtime.inputs.severityThreshold}}\",\n  \"startedAt\": \"{{source.value}}\",\n  \"feeds\": {\n    \"americas\": {{dataSources.weatherAmericas.body.current}},\n    \"europe\": {{dataSources.weatherEurope.body.current}},\n    \"asiaPacific\": {{dataSources.weatherAsiaPacific.body.current}},\n    \"africaMiddleEast\": {{dataSources.weatherAfricaMiddleEast.body.current}}\n  }\n}",
+      "outputMapping": [
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Autonomous climate scan completed across four fixed public weather feeds.",
+          "weightPercent": 10
+        },
+        {
+          "target": "world_state",
+          "path": "latestSeverity",
+          "valueTemplate": "AUTONOMOUS_SCAN_COMPLETE",
+          "weightPercent": 5
+        },
+        {
+          "target": "world_state",
+          "path": "lastWeatherScanAt",
+          "valueTemplate": "{{source.value}}",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "americas",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled scan refreshed Americas crisis posture.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "americas",
+          "path": "climate",
+          "valueTemplate": "WATCH",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "americas",
+          "path": "dangerLevel",
+          "valueTemplate": "45",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "americas",
+          "path": "narrative",
+          "valueTemplate": "Americas response zone refreshed from the scheduled weather scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled scan refreshed Europe crisis posture.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "climate",
+          "valueTemplate": "WARNING",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "dangerLevel",
+          "valueTemplate": "62",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "narrative",
+          "valueTemplate": "Europe response zone escalated after the scheduled weather scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "asia-pacific",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled scan refreshed Asia-Pacific crisis posture.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "asia-pacific",
+          "path": "climate",
+          "valueTemplate": "WATCH",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "asia-pacific",
+          "path": "dangerLevel",
+          "valueTemplate": "52",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "asia-pacific",
+          "path": "narrative",
+          "valueTemplate": "Asia-Pacific response zone refreshed from the scheduled weather scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "africa-middle-east",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled scan refreshed Africa / Middle East crisis posture.",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "africa-middle-east",
+          "path": "climate",
+          "valueTemplate": "STABLE",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "africa-middle-east",
+          "path": "dangerLevel",
+          "valueTemplate": "38",
+          "weightPercent": 5
+        },
+        {
+          "target": "zone",
+          "targetId": "africa-middle-east",
+          "path": "narrative",
+          "valueTemplate": "Africa / Middle East response zone remains under active monitoring.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "government",
+          "path": "latestDecision",
+          "valueTemplate": "Government readiness refreshed by scheduled scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "government",
+          "path": "morale",
+          "valueTemplate": "64",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "government",
+          "path": "narrative",
+          "valueTemplate": "Government coordination moved into active readiness.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "latestDecision",
+          "valueTemplate": "NGO readiness refreshed by scheduled scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "morale",
+          "valueTemplate": "72",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "narrative",
+          "valueTemplate": "NGO field teams increased response readiness.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "private-sector",
+          "path": "latestDecision",
+          "valueTemplate": "Private-sector logistics refreshed by scheduled scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "private-sector",
+          "path": "morale",
+          "valueTemplate": "61",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "private-sector",
+          "path": "narrative",
+          "valueTemplate": "Private-sector logistics shifted into continuity planning.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "insurance",
+          "path": "latestDecision",
+          "valueTemplate": "Insurance review refreshed by scheduled scan.",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "insurance",
+          "path": "morale",
+          "valueTemplate": "58",
+          "weightPercent": 5
+        },
+        {
+          "target": "faction",
+          "targetId": "insurance",
+          "path": "narrative",
+          "valueTemplate": "Insurance review desk refreshed evidence posture.",
+          "weightPercent": 5
+        },
+        {
+          "target": "event",
+          "targetId": "Crisis event log",
+          "path": "chronicle",
+          "valueTemplate": "Autonomous climate scan wrote a crisis Chronicle entry.",
+          "weightPercent": 10
+        }
+      ],
+      "agentChain": [
+        "weather-reader-americas",
+        "weather-reader-europe",
+        "weather-reader-asia-pacific",
+        "weather-reader-africa-middle-east",
+        "severity-assessor",
+        "zone-climate-update",
+        "agency-readiness",
+        "crisis-decision-router"
+      ],
+      "isActive": true,
+      "decisionContinuations": [
+        {
+          "matchPath": "decision",
+          "matchValue": "{\"decision\":\"monitor\"",
+          "nextTriggerId": "climate-monitor-effect"
+        },
+        {
+          "matchPath": "decision",
+          "matchValue": "{\"decision\":\"mobilize\"",
+          "nextTriggerId": "climate-escalation-effect"
+        },
+        {
+          "matchPath": "decision",
+          "matchValue": "{\"decision\":\"escalate\"",
+          "nextTriggerId": "climate-escalation-effect"
+        },
+        {
+          "matchPath": "decision",
+          "matchValue": "{\"decision\":\"stand_down\"",
+          "nextTriggerId": "climate-stand-down-effect"
+        }
+      ]
+    },
+    {
+      "id": "manual-crisis-drill",
+      "name": "Manual Crisis Drill",
+      "type": "manual_action",
+      "sourceId": "weatherEurope",
+      "condition": {},
+      "sourceConfig": {
+        "kind": "manual_payload",
+        "path": "",
+        "includeInAgentInput": true
+      },
+      "typeConfig": {
+        "buttonLabel": "Run Crisis Drill",
+        "description": "Run a prepared crisis drill without changing the autonomous start trigger.",
+        "payloadTemplate": "{\n  \"mode\": \"manual_crisis_drill\",\n  \"scenario\": \"{{runtime.inputs.drillScenario}}\",\n  \"focusRegion\": \"{{runtime.inputs.regionId}}\",\n  \"severityThreshold\": \"{{runtime.inputs.severityThreshold}}\"\n}"
+      },
+      "inputParser": "{\n  \"mode\": \"manual_crisis_drill\",\n  \"scenario\": \"{{runtime.inputs.drillScenario}}\",\n  \"focusRegion\": \"{{runtime.inputs.regionId}}\",\n  \"payload\": {{trigger.payload}},\n  \"feeds\": {\n    \"americas\": {{dataSources.weatherAmericas.body.current}},\n    \"europe\": {{dataSources.weatherEurope.body.current}},\n    \"asiaPacific\": {{dataSources.weatherAsiaPacific.body.current}},\n    \"africaMiddleEast\": {{dataSources.weatherAfricaMiddleEast.body.current}}\n  }\n}",
+      "outputMapping": [
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Manual crisis drill completed for the selected focus region.",
+          "weightPercent": 20
+        },
+        {
+          "target": "world_state",
+          "path": "latestSeverity",
+          "valueTemplate": "MANUAL_DRILL_COMPLETE",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "latestDecision",
+          "valueTemplate": "Manual crisis drill refreshed the focus region.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "climate",
+          "valueTemplate": "DRILL_ACTIVE",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "dangerLevel",
+          "valueTemplate": "70",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "narrative",
+          "valueTemplate": "Manual drill moved Europe into active response rehearsal.",
+          "weightPercent": 10
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "latestDecision",
+          "valueTemplate": "Manual drill mobilized NGO readiness.",
+          "weightPercent": 10
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "morale",
+          "valueTemplate": "78",
+          "weightPercent": 10
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "narrative",
+          "valueTemplate": "Manual drill activated NGO field coordination.",
+          "weightPercent": 10
+        },
+        {
+          "target": "event",
+          "targetId": "Manual crisis drill log",
+          "path": "chronicle",
+          "valueTemplate": "Manual crisis drill wrote a Chronicle entry.",
+          "weightPercent": 10
+        }
+      ],
+      "agentChain": [
+        "severity-assessor",
+        "zone-climate-update",
+        "agency-readiness",
+        "crisis-decision-router"
+      ],
+      "isActive": true
+    },
+    {
+      "type": "data_condition",
+      "sourceId": "weatherEurope",
+      "condition": {},
+      "sourceConfig": {
+        "kind": "runtime_state",
+        "path": "live.latestDecisionContinuation",
+        "includeInAgentInput": true
+      },
+      "typeConfig": {
+        "conditionEnabled": true,
+        "operator": "exists",
+        "compareValue": "true"
+      },
+      "inputParser": "{\n  \"continuation\": \"{{source.value}}\",\n  \"runtimeInputs\": {{runtime.inputs}}\n}",
+      "agentChain": [],
+      "isActive": true,
+      "id": "climate-monitor-effect",
+      "name": "Climate Monitor Effect",
+      "outputMapping": [
+        {
+          "target": "world_state",
+          "path": "latestDecision",
+          "valueTemplate": "monitor",
+          "weightPercent": 20
+        },
+        {
+          "target": "world_state",
+          "path": "latestSeverity",
+          "valueTemplate": "WATCH",
+          "weightPercent": 20
+        },
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Decision continuation routed to monitor posture.",
+          "weightPercent": 20
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "latestDecision",
+          "valueTemplate": "Monitoring posture continued after decision routing.",
+          "weightPercent": 20
+        },
+        {
+          "target": "faction",
+          "targetId": "government",
+          "path": "narrative",
+          "valueTemplate": "Government keeps monitoring posture active.",
+          "weightPercent": 10
+        },
+        {
+          "target": "event",
+          "targetId": "Climate monitor continuation",
+          "path": "chronicle",
+          "valueTemplate": "Decision continuation matched monitor and recorded state movement.",
+          "weightPercent": 10
+        }
+      ]
+    },
+    {
+      "type": "data_condition",
+      "sourceId": "weatherEurope",
+      "condition": {},
+      "sourceConfig": {
+        "kind": "runtime_state",
+        "path": "live.latestDecisionContinuation",
+        "includeInAgentInput": true
+      },
+      "typeConfig": {
+        "conditionEnabled": true,
+        "operator": "exists",
+        "compareValue": "true"
+      },
+      "inputParser": "{\n  \"continuation\": \"{{source.value}}\",\n  \"runtimeInputs\": {{runtime.inputs}}\n}",
+      "agentChain": [],
+      "isActive": true,
+      "id": "climate-escalation-effect",
+      "name": "Climate Escalation Effect",
+      "outputMapping": [
+        {
+          "target": "world_state",
+          "path": "latestDecision",
+          "valueTemplate": "escalate",
+          "weightPercent": 20
+        },
+        {
+          "target": "world_state",
+          "path": "latestSeverity",
+          "valueTemplate": "WARNING",
+          "weightPercent": 20
+        },
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Decision continuation routed to escalation readiness.",
+          "weightPercent": 20
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "latestDecision",
+          "valueTemplate": "Escalation posture activated by decision routing.",
+          "weightPercent": 15
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "dangerLevel",
+          "valueTemplate": "74",
+          "weightPercent": 10
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "narrative",
+          "valueTemplate": "NGO and agency response moved to escalation readiness.",
+          "weightPercent": 10
+        },
+        {
+          "target": "event",
+          "targetId": "Climate escalation continuation",
+          "path": "chronicle",
+          "valueTemplate": "Decision continuation matched escalation and recorded state movement.",
+          "weightPercent": 5
+        }
+      ]
+    },
+    {
+      "type": "data_condition",
+      "sourceId": "weatherEurope",
+      "condition": {},
+      "sourceConfig": {
+        "kind": "runtime_state",
+        "path": "live.latestDecisionContinuation",
+        "includeInAgentInput": true
+      },
+      "typeConfig": {
+        "conditionEnabled": true,
+        "operator": "exists",
+        "compareValue": "true"
+      },
+      "inputParser": "{\n  \"continuation\": \"{{source.value}}\",\n  \"runtimeInputs\": {{runtime.inputs}}\n}",
+      "agentChain": [],
+      "isActive": true,
+      "id": "climate-stand-down-effect",
+      "name": "Climate Stand Down Effect",
+      "outputMapping": [
+        {
+          "target": "world_state",
+          "path": "latestDecision",
+          "valueTemplate": "stand_down",
+          "weightPercent": 25
+        },
+        {
+          "target": "world_state",
+          "path": "latestSeverity",
+          "valueTemplate": "STABLE",
+          "weightPercent": 25
+        },
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Decision continuation routed to stand-down posture.",
+          "weightPercent": 20
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "latestDecision",
+          "valueTemplate": "Stand-down posture recorded after decision routing.",
+          "weightPercent": 10
+        },
+        {
+          "target": "faction",
+          "targetId": "insurance",
+          "path": "narrative",
+          "valueTemplate": "Insurance desk moved to post-event review posture.",
+          "weightPercent": 10
+        },
+        {
+          "target": "event",
+          "targetId": "Climate stand-down continuation",
+          "path": "chronicle",
+          "valueTemplate": "Decision continuation matched stand_down and recorded state movement.",
+          "weightPercent": 10
+        }
+      ]
+    }
+  ],
+  "manualActions": [
+    {
+      "id": "run-crisis-drill",
+      "label": "Run Crisis Drill",
+      "description": "Run the configured crisis drill scenario.",
+      "triggerId": "manual-crisis-drill",
+      "ownerOnly": true
+    }
+  ],
+  "graph": {
+    "nodes": [],
+    "edges": []
+  },
+  "runtimeLayout": [
+    {
+      "id": "crisis-summary",
+      "title": "Crisis Summary",
+      "kind": "summary",
+      "source": "latestRun.summary"
+    },
+    {
+      "id": "world-graph",
+      "title": "World Graph",
+      "kind": "graph",
+      "source": "graph"
+    },
+    {
+      "id": "agent-responses",
+      "title": "Agent Responses",
+      "kind": "agent_response",
+      "source": "latestRun.agentResponses"
+    },
+    {
+      "id": "event-log",
+      "title": "Live Events",
+      "kind": "event_log",
+      "source": "events"
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts",
+      "kind": "receipt_list",
+      "source": "latestRun.receipts"
+    },
+    {
+      "id": "manual-actions",
+      "title": "Manual Actions",
+      "kind": "manual_actions",
+      "source": "manualActions"
+    }
+  ],
+  "statusPolicy": {
+    "runningStatus": "running",
+    "stoppedStatus": "stopped",
+    "restartRequiresFreshInputs": true
+  },
+  "secrets": [],
+  "lastPublishedAt": null,
+  "config": {
+    "worldSlug": "global-climate-crisis-response",
+    "sourceTemplateSlug": "global-climate-crisis-response",
+    "officialTemplate": "climate-crisis-response-v2",
+    "dataMode": "fixed-public-weather-json",
+    "runtimeFoundation": "runtime-foundation-v1",
+    "liveAutonomy": "wallet-deployed-world-contract",
+    "allocationModel": "allocationPercent_compiles_to_manifest_weights",
+    "liveRequirements": {
+      "dataSources": [
+        {
+          "id": "weatherAmericas",
+          "label": "Americas fixed weather feed",
+          "resolvedHttpUrl": true
+        },
+        {
+          "id": "weatherEurope",
+          "label": "Europe fixed weather feed",
+          "resolvedHttpUrl": true
+        },
+        {
+          "id": "weatherAsiaPacific",
+          "label": "Asia-Pacific fixed weather feed",
+          "resolvedHttpUrl": true
+        },
+        {
+          "id": "weatherAfricaMiddleEast",
+          "label": "Africa / Middle East fixed weather feed",
+          "resolvedHttpUrl": true
+        }
+      ],
+      "triggers": [
+        {
+          "id": "scheduled-weather-check",
+          "label": "Scheduled Weather Check",
+          "requiresSubscription": true,
+          "requiresDecisionContinuations": true
+        }
+      ]
+    }
+  }
+}

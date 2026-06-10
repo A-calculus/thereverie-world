@@ -436,6 +436,7 @@ export interface WorldBuilderTrigger {
   cooldownMs?: number;
   graphPosition?: { x: number; y: number };
   outputMapping?: TriggerOutputMapping[];
+  decisionContinuations?: TriggerDecisionContinuation[];
   nextTriggerIds?: string[];
 }
 

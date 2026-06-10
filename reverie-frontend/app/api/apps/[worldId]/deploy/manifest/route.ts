@@ -33,21 +33,38 @@ function readPath(value: unknown, path: string): unknown {
   }, value);
 }
 
+function baseUrlFromRequest(req: Request): string | undefined {
+  const origin = req.headers.get('origin');
+  if (origin) return origin;
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  if (!host) return undefined;
+  const proto = req.headers.get('x-forwarded-proto') ?? 'http';
+  return `${proto}://${host}`;
+}
+
 function missingResolvedPathErrors(builder: Record<string, unknown>, snapshot: Record<string, unknown>) {
   const requirements = objectValue(objectValue(builder.config).liveRequirements);
   const errors: string[] = [];
+  const missingPaths: string[] = [];
   for (const requirement of arrayValue(requirements.resolvedPaths)) {
     const path = stringValue(requirement.path);
     if (!path) continue;
     const value = readPath(snapshot, path);
     if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+      missingPaths.push(path);
       errors.push(`${stringValue(requirement.label, path)} is missing at ${path}.`);
     }
+  }
+  if (
+    missingPaths.includes('dataSources.routeProgress.body.progress.projectedPosition.latitude') ||
+    missingPaths.includes('dataSources.routeProgress.body.progress.projectedPosition.longitude')
+  ) {
+    errors.push('Route progress did not resolve projected latitude/longitude. Replace Cargo defaults or check start port, destination port, and speed.');
   }
   return errors;
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
   const session = await getServerSession();
   if (!session) return NextResponse.json({ error: 'Connect the owner wallet to prepare live deployment.' }, { status: 401 });
   if (!hasSupabaseAdminEnv()) return NextResponse.json({ error: 'Supabase is required for live world deployment.' }, { status: 503 });
@@ -65,6 +82,7 @@ export async function GET(_req: Request, { params }: Params) {
     builder: rawBuilder,
     publicState,
     fetchDataSources: true,
+    baseUrl: baseUrlFromRequest(req),
   });
   if (!builder.lastPublishedAt) {
     return NextResponse.json({ error: 'Publish the world builder before preparing live deployment.' }, { status: 400 });

@@ -1,5 +1,5 @@
 import routeGraph from '@/content/cargo-climate/routes.v1.json';
-import officialTemplate from '@/content/official-templates/cargo-climate-guard.v1.json';
+import officialTemplate from '@/content/official-templates/cargo-climate-guard.json';
 import { applyLiveBuilderAgentDefaults } from '@/lib/shared/live-agent-step-defaults';
 import type {
   AgentExecutionRecord,

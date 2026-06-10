@@ -1,5 +1,5 @@
-import cargoTemplate from '@/content/official-templates/cargo-climate-guard.v1.json';
-import climateTemplate from '@/content/official-templates/global-climate-crisis-response.v1.json';
+import cargoTemplate from '@/content/official-templates/cargo-climate-guard.json';
+import climateTemplate from '@/content/official-templates/global-climate-crisis-response.json';
 import cryptoTemplate from '@/content/official-templates/crypto-market-intelligence.v1.json';
 import sportsTemplate from '@/content/official-templates/sports-prediction-league.v1.json';
 import kingdomTemplate from '@/content/official-templates/living-kingdom-lite.v1.json';
@@ -161,8 +161,8 @@ export const officialBuilderTemplates: OfficialBuilderTemplate[] = [
     name: 'Cargo Climate Guard',
     description: 'Sea-route weather system with rerouting, on-chain reactivity, receipts, and STOP_WORLD behavior for unsafe realtime routes.',
     category: 'supply_chain',
-    officialTemplate: 'cargo-official-template-v1',
-    extraConfig: { routeSourceVersion: 'cargo-routes-v1' },
+    officialTemplate: 'cargo-autonomous-template-v2',
+    extraConfig: { routeSourceVersion: 'cargo-routes-v2' },
     builder: normalizeWithRuntimeFoundation(applyLiveBuilderAgentDefaults(enrichOfficialBuilder(cargoTemplate as WorldBuilderConfig, 'cargo-climate-guard'), 'cargo-climate-guard')),
   },
   {
@@ -170,8 +170,8 @@ export const officialBuilderTemplates: OfficialBuilderTemplate[] = [
     name: 'Global Climate Crisis Response',
     description: 'Weather-triggered crisis response world with regional zones, agency factions, Chronicle logs, and receipts.',
     category: 'insurance',
-    officialTemplate: 'climate-crisis-response-v1',
-    builder: normalizeWithRuntimeFoundation(applyLiveBuilderAgentDefaults(enrichOfficialBuilder(climateTemplate as WorldBuilderConfig, 'global-climate-crisis-response'), 'global-climate-crisis-response')),
+    officialTemplate: 'climate-crisis-response-v2',
+    builder: normalizeWithRuntimeFoundation(applyLiveBuilderAgentDefaults(climateTemplate as WorldBuilderConfig, 'global-climate-crisis-response')),
   },
   {
     slug: 'crypto-market-intelligence',

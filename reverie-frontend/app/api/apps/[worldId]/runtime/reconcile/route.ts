@@ -8,6 +8,7 @@ import { resolveBuilderForServerManifest } from '@/lib/server/live-builder-resol
 import { agentReceiptUrl } from '@/lib/shared/explorer-links';
 import { getLatestRuntimeBlock, getRuntimeEventScan, getVerifiedWorldBalance, hydrateCompiledManifestState, type RuntimeDecodedEvent } from '@/lib/server/live-runtime-verification';
 import { fetchAgentReceiptDetails } from '@/lib/server/agent-receipts';
+import { buildReconciledEffects, mergeReconciledManifestState } from '@/lib/server/reconciled-effects';
 
 interface Params {
   params: Promise<{ worldId: string }>;
@@ -121,6 +122,17 @@ export async function POST(req: NextRequest, { params }: Params) {
     address: world.contract_address,
     manifest,
   }).catch(() => null);
+  const reconciled = buildReconciledEffects({
+    existing: objectValue(liveState.reconciledEffects),
+    builder,
+    manifest,
+    events,
+  });
+  const mergedManifestState = mergeReconciledManifestState({
+    manifestState: liveManifestState,
+    builder,
+    effects: reconciled.effects,
+  });
 
   const requestEvents = events.filter((event) => event.requestId);
   for (const event of requestEvents) {
@@ -205,6 +217,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       lastReconciledAt: now,
       lastWorkflowEvents: events,
       manifestState: liveManifestState,
+      mergedManifestState,
+      reconciledEffects: reconciled.effects,
+      latestDecisionContinuation: reconciled.latestDecisionContinuation ?? objectValue(liveState.latestDecisionContinuation),
       reconcileCheckpoint: {
         fromBlock,
         scannedToBlock: scan.scannedToBlock,
@@ -221,8 +236,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       status: completed.length > 0 ? 'running' : objectValue(state.runtime).status ?? 'running',
     },
     lastUpdated: now,
-    zones: liveManifestState?.zones ?? state.zones,
-    factions: liveManifestState?.factions ?? state.factions,
+    zones: mergedManifestState.zones ?? liveManifestState?.zones ?? state.zones,
+    factions: mergedManifestState.factions ?? liveManifestState?.factions ?? state.factions,
   };
   const { data, error } = await supabase
     .from('worlds')

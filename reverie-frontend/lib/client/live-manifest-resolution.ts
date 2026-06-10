@@ -12,9 +12,11 @@ export async function resolveBuilderForLiveManifest(options: {
   builder: WorldBuilderConfig;
   inputs?: Record<string, unknown>;
   publicState?: Record<string, unknown>;
+  baseUrl?: string | URL;
 }): Promise<{ builder: WorldBuilderConfig; snapshot: ResolutionSnapshot }> {
   return resolveBuilderForManifestCore({
     ...options,
+    baseUrl: options.baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : undefined),
     fetchDataSources: true,
     resolutionSource: 'browser_before_arm',
   });

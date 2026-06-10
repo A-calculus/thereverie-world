@@ -25,6 +25,14 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function readPath(value: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, part) => {
+    if (Array.isArray(current) && /^\d+$/.test(part)) return current[Number(part)];
+    if (current && typeof current === 'object') return (current as Record<string, unknown>)[part];
+    return undefined;
+  }, value);
+}
+
 function numberValue(value: unknown, fallback = 0) {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -80,6 +88,7 @@ type ManifestPreview = {
   cost: RuntimeCostEstimate | null;
   resolvedInputSnapshot?: { dataSources?: Record<string, unknown> } | null;
   resolvedAgentUrls?: Array<{ id?: string; name?: string; url?: string }>;
+  resolvedRouteProgressCoordinate?: { latitude: number; longitude: number } | null;
   error?: string | null;
 };
 
@@ -200,17 +209,32 @@ export default function WorldBuilderPage() {
         const resolved = await resolveBuilderForLiveManifest({ builder: previewBuilder, publicState: { builder: previewBuilder } });
         const manifest = await compileLiveManifest(resolved.builder);
         const cost = estimateRuntimeCost(previewBuilder);
-        const resolvedAgentUrls = (resolved.builder.agentChain ?? [])
+        const urlRows = (resolved.builder.agentChain ?? [])
           .map((step) => {
             const record = step as WorldBuilderAgentStep & { url?: string };
-            return { id: step.id, name: step.name, url: step.urlTemplate ?? record.url };
+            const extra = record as unknown as Record<string, unknown>;
+            const sourceStepId = typeof extra.sourceStepId === 'string'
+              ? String(extra.sourceStepId)
+              : step.id;
+            return { id: sourceStepId, name: step.name, url: step.urlTemplate ?? record.url };
           })
           .filter((step) => typeof step.url === 'string' && step.url.trim());
+        const resolvedAgentUrls = Array.from(new Map(urlRows.map((step) => [`${step.id}:${step.url}`, step])).values());
+        const latitude = readPath(resolved.snapshot, 'dataSources.routeProgress.body.progress.projectedPosition.latitude');
+        const longitude = readPath(resolved.snapshot, 'dataSources.routeProgress.body.progress.projectedPosition.longitude');
+        const resolvedRouteProgressCoordinate = typeof latitude === 'number' && typeof longitude === 'number'
+          ? { latitude, longitude }
+          : null;
+        const manifestForPreview = manifest as unknown as NonNullable<ManifestPreview['manifest']>;
+        const unsupported = [
+          ...(manifestForPreview.unsupported ?? []),
+        ];
         if (!cancelled) setManifestPreview({
-          manifest: manifest as unknown as ManifestPreview['manifest'],
+          manifest: { ...manifestForPreview, unsupported: Array.from(new Set(unsupported)) },
           cost,
           resolvedInputSnapshot: resolved.snapshot,
           resolvedAgentUrls,
+          resolvedRouteProgressCoordinate,
         });
       } catch (error) {
         if (!cancelled) setManifestPreview({ manifest: null, cost: estimateRuntimeCost(previewBuilder), error: error instanceof Error ? error.message : 'Unable to compile manifest preview.' });
@@ -1102,6 +1126,11 @@ export default function WorldBuilderPage() {
               <details className="mt-3 rounded-lg border border-dream/15 bg-void/40 p-3 text-xs text-text-muted">
                 <summary className="cursor-pointer text-text-primary">Resolved live URLs</summary>
                 <div className="mt-3 space-y-2">
+                  {manifestPreview.resolvedRouteProgressCoordinate && (
+                    <p className="break-all">
+                      <span className="text-teal">Route progress coordinate</span>: {manifestPreview.resolvedRouteProgressCoordinate.latitude}, {manifestPreview.resolvedRouteProgressCoordinate.longitude}
+                    </p>
+                  )}
                   {manifestPreview.resolvedAgentUrls?.map((step) => (
                     <p key={`${step.id}:${step.url}`} className="break-all">
                       <span className="text-teal">{step.name ?? step.id}</span>: {step.url}
@@ -1116,6 +1145,11 @@ export default function WorldBuilderPage() {
                       </p>
                     ) : null;
                   })}
+                  {!manifestPreview.resolvedRouteProgressCoordinate && Boolean(objectValue(manifestPreview.resolvedInputSnapshot?.dataSources).routeProgress) && (
+                    <p className="text-red-300">
+                      Route progress did not resolve projected latitude/longitude. Replace Cargo defaults or check start port, destination port, and speed.
+                    </p>
+                  )}
                 </div>
               </details>
             )}

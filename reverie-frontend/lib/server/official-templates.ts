@@ -51,10 +51,6 @@ export function isOfficialCargoTemplateState(state: Record<string, unknown>) {
 export function mergeOfficialTemplateConfig<T extends { slug?: string; world_config?: unknown }>(record: T): T {
   const official = getOfficialTemplateBySlug(record.slug);
   if (!official) return record;
-  const config = objectValue(record.world_config);
-  const worldState = objectValue(config.worldState);
-  const builder = objectValue(worldState.builder ?? config.builder);
-  if (Object.keys(builder).length > 0) return record;
   return {
     ...record,
     world_config: official.world_config,
@@ -64,6 +60,17 @@ export function mergeOfficialTemplateConfig<T extends { slug?: string; world_con
 function shouldHydrateOfficialTemplate(existing: unknown) {
   const record = objectValue(existing);
   if (Object.keys(record).length === 0) return true;
+  const slug = typeof record.slug === 'string' ? record.slug : '';
+  const official = getOfficialTemplateBySlug(slug);
+  if (official) {
+    const existingConfig = objectValue(record.world_config);
+    const existingWorldState = objectValue(existingConfig.worldState);
+    const existingBuilder = objectValue(existingWorldState.builder ?? existingConfig.builder);
+    const officialConfig = objectValue(official.world_config);
+    const officialWorldState = objectValue(officialConfig.worldState);
+    const officialBuilder = objectValue(officialWorldState.builder ?? officialConfig.builder);
+    return JSON.stringify(existingBuilder) !== JSON.stringify(officialBuilder);
+  }
   if (record.creator_id !== null) return true;
   if (record.is_public !== true || record.featured !== true) return true;
   const config = objectValue(record.world_config);

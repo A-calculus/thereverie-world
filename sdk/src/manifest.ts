@@ -31,6 +31,7 @@ export interface WorldManifestFaction {
 }
 
 export interface WorldManifestTrigger {
+  sourceId?: string;
   triggerId: `0x${string}`;
   active: boolean;
   triggerType: number;
@@ -632,14 +633,14 @@ function compileAgentStep(
     return payload ? [{ ...emptyStep(MANIFEST_STEP_KIND.webParseString), payload }] : [];
   }
 
-  if (agentId === "chronicle" || name.toLowerCase().includes("chronicle")) {
+  if (agentId === "chronicle") {
     return [
       { ...emptyStep(MANIFEST_STEP_KIND.llmString), prompt: fullPrompt, system },
       { ...emptyStep(MANIFEST_STEP_KIND.chronicle), prompt: "" },
     ];
   }
 
-  if (agentId === "zoneClimate" || name.toLowerCase().includes("climate")) {
+  if (agentId === "zoneClimate") {
     return [
       {
         ...emptyStep(MANIFEST_STEP_KIND.jsonString),
@@ -651,14 +652,14 @@ function compileAgentStep(
     ];
   }
 
-  if (agentId === "conflict" || name.toLowerCase().includes("conflict")) {
+  if (agentId === "conflict") {
     return [
       { ...emptyStep(MANIFEST_STEP_KIND.llmString), zoneId, prompt: fullPrompt, system },
       { ...emptyStep(MANIFEST_STEP_KIND.applyConflict), zoneId },
     ];
   }
 
-  if (agentId === "factionMorale" || name.toLowerCase().includes("morale")) {
+  if (agentId === "factionMorale") {
     return [
       { ...emptyStep(MANIFEST_STEP_KIND.llmString), prompt: fullPrompt, system },
       {
@@ -666,6 +667,14 @@ function compileAgentStep(
         factionId,
       },
     ];
+  }
+
+  if (agentType === "reverie_custom") {
+    if (hasUnresolvedTemplate(fullPrompt) || hasUnresolvedTemplate(system)) {
+      unsupported.push(`Custom step "${name}" has unresolved template placeholders. Apply and arm with resolved runtime inputs before deployment.`);
+      return [];
+    }
+    return [{ ...emptyStep(MANIFEST_STEP_KIND.llmString), prompt: fullPrompt, system }];
   }
 
   unsupported.push(`Agent "${name}" (${agentType || "unknown"}) cannot be compiled into a live on-chain workflow yet.`);
@@ -799,6 +808,7 @@ export function compileWorldManifest(rawBuilder: unknown): CompiledWorldManifest
     const contractTriggerId = bytes32Value(sourceTriggerId, `reverie:trigger:${worldKey}:${stringValue(trigger.name, String(triggers.length))}`);
     triggerIdBySource.set(sourceTriggerId, contractTriggerId);
     triggers.push({
+      sourceId: sourceTriggerId,
       triggerId: contractTriggerId,
       active: trigger.isActive !== false,
       triggerType: triggerType(trigger.type),

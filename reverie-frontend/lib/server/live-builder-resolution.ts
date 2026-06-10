@@ -13,6 +13,7 @@ export async function resolveBuilderForServerManifest(options: {
   inputs?: Record<string, unknown>;
   publicState?: Record<string, unknown>;
   fetchDataSources?: boolean;
+  baseUrl?: string | URL;
 }): Promise<{ builder: WorldBuilderConfig; snapshot: ServerResolutionSnapshot }> {
   return resolveBuilderForManifestCore({
     ...options,

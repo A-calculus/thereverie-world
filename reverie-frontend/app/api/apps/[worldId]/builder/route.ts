@@ -97,6 +97,15 @@ function assignmentFor(world: { id: string; name: string; contract_address?: str
   };
 }
 
+function compatibleTemplateAgentConfig(config: Record<string, unknown>, worldId: string, templateName: string, localId: string) {
+  return (
+    config.createdFromTemplate === true &&
+    config.assignedWorldId === worldId &&
+    config.sourceTemplateName === templateName &&
+    config.sourceTemplateAgentId === localId
+  );
+}
+
 function replaceAgentNodeId(value: string, agentIdMap: Map<string, string>): string {
   if (!value.startsWith('agent:')) return value;
   const nextId = agentIdMap.get(value.slice('agent:'.length));
@@ -112,10 +121,19 @@ async function materializeLocalBuilderAgents(
   const agentIdMap = new Map<string, string>();
   const agentNameMap = new Map<string, string>();
   const createdAgents: AgentSummary[] = [];
+  const retainedTemplateAgentIds = new Set<string>();
   const state = objectValue(world.world_state);
   const templateName = typeof state.templateSlug === 'string' ? state.templateSlug : 'Template';
   const assignment = assignmentFor(world);
   const nextChain: WorldBuilderConfig['agentChain'] = [];
+  const { data: existingAgentRows } = await supabase
+    .from('agents')
+    .select('id,owner_id,name,agent_type,description,status,created_at,system_prompt,config,is_public')
+    .eq('owner_id', userId);
+  const existingTemplateAgents = (existingAgentRows ?? []).filter((agent) => {
+    const config = objectValue(agent.config);
+    return config.createdFromTemplate === true && config.assignedWorldId === world.id;
+  });
 
   for (const [index, step] of (builder.agentChain ?? []).entries()) {
     const localId = step.agentId ?? step.id;
@@ -126,49 +144,72 @@ async function materializeLocalBuilderAgents(
 
     const agentType = validAgentType(step.agentType);
     const agentName = `${step.name} (${templateName} Template - ${world.name} ${world.id.slice(0, 8)})`;
-    const { data, error } = await supabase
+    const nextConfig = {
+      status: 'ACTIVE',
+      createdFromTemplate: true,
+      sourceTemplateName: templateName,
+      sourceTemplateAgentId: localId,
+      sourceTemplateAgentOrder: index + 1,
+      ...assignment,
+      nativeAgentId: agentType,
+      method: agentType,
+      parameters: {
+        purpose: step.purpose,
+        inputTemplate: step.inputTemplate,
+        urlTemplate: step.urlTemplate,
+        selector: step.selector,
+        resultAlias: step.resultAlias,
+        contextTemplate: step.contextTemplate,
+      },
+      inputTemplate: step.inputTemplate,
+      persistResult: Boolean(step.persistResult),
+      persistOnChain: false,
+    };
+    const existingAgent = existingTemplateAgents.find((agent) => {
+      const config = objectValue(agent.config);
+      return agent.name === agentName || compatibleTemplateAgentConfig(config, world.id, templateName, localId);
+    });
+    const writeQuery = existingAgent
+      ? supabase
+          .from('agents')
+          .update({
+            name: agentName,
+            description: `${step.purpose} Created from the ${templateName} template for ${world.name}.`,
+            agent_type: agentType,
+            config: nextConfig,
+            system_prompt: step.purpose || step.inputTemplate || null,
+            tool_calls: null,
+            status: 'ACTIVE',
+            is_public: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingAgent.id)
+          .eq('owner_id', userId)
+      : supabase
       .from('agents')
       .insert({
         owner_id: userId,
         name: agentName,
         description: `${step.purpose} Created from the ${templateName} template for ${world.name}.`,
         agent_type: agentType,
-        config: {
-          status: 'ACTIVE',
-          createdFromTemplate: true,
-          sourceTemplateName: templateName,
-          sourceTemplateAgentId: localId,
-          sourceTemplateAgentOrder: index + 1,
-          ...assignment,
-          nativeAgentId: agentType,
-          method: agentType,
-          parameters: {
-            purpose: step.purpose,
-            inputTemplate: step.inputTemplate,
-            urlTemplate: step.urlTemplate,
-            selector: step.selector,
-            resultAlias: step.resultAlias,
-            contextTemplate: step.contextTemplate,
-          },
-          inputTemplate: step.inputTemplate,
-          persistResult: Boolean(step.persistResult),
-          persistOnChain: false,
-        },
+        config: nextConfig,
         system_prompt: step.purpose || step.inputTemplate || null,
         tool_calls: null,
         status: 'ACTIVE',
         is_public: false,
         updated_at: new Date().toISOString(),
-      })
+      });
+    const { data, error } = await writeQuery
       .select('id,owner_id,name,agent_type,description,status,created_at,system_prompt,config,is_public')
       .single();
     if (error) throw error;
 
     const createdId = String(data.id);
     const createdName = String(data.name);
+    retainedTemplateAgentIds.add(createdId);
     agentIdMap.set(localId, createdId);
     agentNameMap.set(localId, createdName);
-    createdAgents.push(formatDbAgent(data as {
+    if (!existingAgent) createdAgents.push(formatDbAgent(data as {
       id: string;
       owner_id: string;
       name: string;
@@ -180,10 +221,28 @@ async function materializeLocalBuilderAgents(
       config: Record<string, unknown> | null;
       is_public: boolean;
     }));
-    nextChain.push({ ...step, id: createdId, agentId: createdId, name: createdName, agentType });
+    nextChain.push({
+      ...step,
+      id: createdId,
+      agentId: createdId,
+      name: createdName,
+      agentType,
+      sourceTemplateAgentId: localId,
+    } as WorldBuilderConfig['agentChain'][number]);
   }
 
   if (agentIdMap.size === 0) return { builder, createdAgents };
+
+  const staleTemplateAgentIds = existingTemplateAgents
+    .map((agent) => String(agent.id))
+    .filter((id) => !retainedTemplateAgentIds.has(id));
+  if (staleTemplateAgentIds.length > 0) {
+    await supabase
+      .from('agents')
+      .delete()
+      .eq('owner_id', userId)
+      .in('id', staleTemplateAgentIds);
+  }
 
   return {
     createdAgents,

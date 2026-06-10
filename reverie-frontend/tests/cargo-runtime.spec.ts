@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { compileWorldManifest } from '@worldframe/sdk/browser';
-import officialTemplate from '../content/official-templates/cargo-climate-guard.v1.json';
+import officialTemplate from '../content/official-templates/cargo-climate-guard.json';
 import type { WorldBuilderConfig } from '../lib/shared/types';
 import { buildCargoRoutePlan, projectCargoProgress } from '../lib/shared/cargo-climate/engine';
 import { executeTriggerFlow } from '../lib/shared/world-runtime/trigger-flow';
+import { resolveBuilderForManifestCore } from '../lib/shared/live-builder-resolution-core';
 
 const builder = officialTemplate as WorldBuilderConfig;
 
@@ -55,6 +56,123 @@ test('official Cargo route plan returns alternatives and a two-hour projection',
   expect(progress.projectedPosition.latitude).toEqual(expect.any(Number));
   expect(progress.projectedPosition.longitude).toEqual(expect.any(Number));
   expect(progress.nextStop.id).toBeTruthy();
+});
+
+test('frontend live resolver resolves Cargo sources locally with app-origin metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes('/routes')) {
+      return Response.json({ graph: { ports: [] }, source: 'test' });
+    }
+    if (url.includes('/route-plan')) {
+      return Response.json({ routePlan: { routeId: 'shanghai-rotterdam', alternatives: [] }, source: 'test' });
+    }
+    if (url.includes('/progress')) {
+      return Response.json({
+        progress: {
+          projectedPosition: { latitude: 1.29, longitude: 103.85 },
+          nextStop: { id: 'singapore' },
+        },
+        source: 'test',
+      });
+    }
+    if (url.includes('/weather-sample')) {
+      return Response.json({ weather: { temperature: 27, windSpeed: 8 }, source: 'test' });
+    }
+    return Response.json({ error: 'unexpected URL' }, { status: 404 });
+  }) as typeof fetch;
+
+  try {
+    const expectedProgress = projectCargoProgress(buildCargoRoutePlan({
+      startPortId: 'shanghai',
+      destinationPortId: 'rotterdam',
+      speedKnots: 18,
+      includeAlternatives: true,
+    }), { hoursAhead: 2 });
+    const resolved = await resolveBuilderForManifestCore({
+      builder,
+      inputs: { startPortId: 'shanghai', destinationPortId: 'rotterdam', speedKnots: 18 },
+      fetchDataSources: true,
+      baseUrl: 'http://apps.lvh.me:3000',
+    });
+    expect(calls).toEqual([]);
+    expect(resolved.snapshot.dataSources.routeProgress).toMatchObject({
+      url: 'http://apps.lvh.me:3000/api/demo/cargo-climate/progress?startPortId=shanghai&destinationPortId=rotterdam&speedKnots=18&hours=2',
+      body: { progress: { projectedPosition: expectedProgress.projectedPosition } },
+    });
+    const weatherStep = resolved.builder.agentChain.find((step) => step.id.startsWith('weather-sampler__'));
+    expect(weatherStep?.urlTemplate).toContain(`latitude=${expectedProgress.projectedPosition.latitude}`);
+    expect(weatherStep?.urlTemplate).toContain(`longitude=${expectedProgress.projectedPosition.longitude}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('frontend live resolver applies Cargo defaults when world slug is customized', async () => {
+  const customSlugBuilder: WorldBuilderConfig = {
+    ...builder,
+    uiSlug: 'atlantic-cargo-guard',
+    config: {
+      ...(builder.config ?? {}),
+      sourceTemplateSlug: 'cargo-climate-guard',
+    },
+  };
+  const expectedProgress = projectCargoProgress(buildCargoRoutePlan({
+    startPortId: 'shanghai',
+    destinationPortId: 'rotterdam',
+    speedKnots: 18,
+    includeAlternatives: true,
+  }), { hoursAhead: 2 });
+
+  const resolved = await resolveBuilderForManifestCore({
+    builder: customSlugBuilder,
+    inputs: { startPortId: 'shanghai', destinationPortId: 'rotterdam', speedKnots: 18 },
+    fetchDataSources: true,
+    baseUrl: 'http://atlantic-cargo-guard.app.lvh.me:3000',
+  });
+
+  expect(resolved.snapshot.dataSources.routeProgress).toMatchObject({
+    body: { progress: { projectedPosition: expectedProgress.projectedPosition } },
+  });
+  const weatherStep = resolved.builder.agentChain.find((step) => step.id.startsWith('weather-sampler__'));
+  expect(weatherStep?.urlTemplate).toContain(`latitude=${expectedProgress.projectedPosition.latitude}`);
+  expect(weatherStep?.urlTemplate).toContain(`longitude=${expectedProgress.projectedPosition.longitude}`);
+});
+
+test('frontend live resolver rejects empty coordinate query values before fetching', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return Response.json({ ok: true });
+  }) as typeof fetch;
+
+  try {
+    const resolved = await resolveBuilderForManifestCore({
+      builder: {
+        ...builder,
+        uiSlug: 'custom-empty-query-test',
+        config: {},
+        dataSources: [
+          { id: 'badWeather', name: 'Bad Weather', type: 'weather', url: '/api/weather?latitude=&longitude=', method: 'GET' },
+        ],
+        agentChain: [],
+        triggers: [],
+      },
+      fetchDataSources: true,
+      baseUrl: 'http://apps.lvh.me:3000',
+    });
+    expect(calls).toHaveLength(0);
+    expect(resolved.snapshot.dataSources.badWeather).toMatchObject({
+      ok: false,
+      error: 'URL query value(s) are empty: latitude, longitude.',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('official Cargo manifest validates resolved sources and decision continuations', () => {

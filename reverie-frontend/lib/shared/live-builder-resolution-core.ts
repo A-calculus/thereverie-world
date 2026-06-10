@@ -1,4 +1,11 @@
 import { canonicalBaseUrl } from '@/lib/shared/base-url';
+import { builderTemplateSlug } from '@/lib/shared/cargo-template';
+import {
+  buildCargoRoutePlan,
+  createWeatherSample,
+  getCargoRouteGraph,
+  projectCargoProgress,
+} from '@/lib/shared/cargo-climate/engine';
 import { applyLiveAgentStepDefaults, applyLiveBuilderAgentDefaults } from '@/lib/shared/live-agent-step-defaults';
 import type {
   TriggerSourceConfig,
@@ -22,6 +29,7 @@ type ResolveOptions = {
   publicState?: Record<string, unknown>;
   fetchDataSources?: boolean;
   resolutionSource?: string;
+  baseUrl?: string | URL;
 };
 
 export function objectValue(value: unknown): Record<string, unknown> {
@@ -55,14 +63,30 @@ export function interpolateUrl(template: string, variables: Record<string, unkno
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, rawPath: string) => encodeURIComponent(stringifyTemplateValue(readPath(variables, rawPath.trim()))));
 }
 
-export function absoluteUrl(url: string): string {
-  if (/^https?:\/\//i.test(url)) return url;
-  return new URL(url.startsWith('/') ? url : `/${url}`, canonicalBaseUrl()).toString();
+function baseUrlForResolution(baseUrl?: string | URL) {
+  if (baseUrl instanceof URL) return new URL(baseUrl.toString());
+  if (typeof baseUrl === 'string' && baseUrl.trim()) {
+    try {
+      return new URL(baseUrl.includes('://') ? baseUrl : `https://${baseUrl}`);
+    } catch {
+      return canonicalBaseUrl();
+    }
+  }
+  return canonicalBaseUrl();
 }
 
-function resolveUrlField(value: string, variables: Record<string, unknown>): string {
+export function absoluteUrl(url: string, baseUrl?: string | URL): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = baseUrlForResolution(baseUrl);
+  base.pathname = '/';
+  base.search = '';
+  base.hash = '';
+  return new URL(url.startsWith('/') ? url : `/${url}`, base).toString();
+}
+
+function resolveUrlField(value: string, variables: Record<string, unknown>, baseUrl?: string | URL): string {
   const resolved = interpolateUrl(value, variables);
-  return resolved ? absoluteUrl(resolved) : resolved;
+  return resolved ? absoluteUrl(resolved, baseUrl) : resolved;
 }
 
 function inputDefaults(builder: WorldBuilderConfig, overrides?: Record<string, unknown>) {
@@ -86,15 +110,213 @@ function withResponseAlias(snapshot: Record<string, unknown>) {
   };
 }
 
+function dataSourceDependencyIds(source: WorldBuilderDataSource) {
+  const values = [source.url, source.requestBodyTemplate].filter((value): value is string => typeof value === 'string');
+  return Array.from(new Set(values.flatMap((value) => (
+    Array.from(value.matchAll(/\bdataSources\.([a-zA-Z0-9_-]+)/g), (match) => match[1]).filter(Boolean)
+  ))));
+}
+
+function emptyCoordinateQueryParams(url: string) {
+  try {
+    const parsed = new URL(url);
+    return ['latitude', 'longitude', 'lat', 'lon'].filter((param) => (
+      parsed.searchParams.has(param) && !parsed.searchParams.get(param)?.trim()
+    ));
+  } catch {
+    return [];
+  }
+}
+
+function stringInput(inputs: Record<string, unknown>, key: string, fallback: string) {
+  const value = inputs[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function numberInput(inputs: Record<string, unknown>, key: string, fallback: number) {
+  const value = inputs[key];
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function searchNumber(url: string, key: string): number | undefined {
+  try {
+    const value = new URL(url).searchParams.get(key);
+    if (value === null || !value.trim()) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function cargoInputParams(variables: Record<string, unknown>, url: string) {
+  const inputs = objectValue(objectValue(variables.runtime).inputs);
+  let searchParams: URLSearchParams | null = null;
+  try {
+    searchParams = new URL(url).searchParams;
+  } catch {
+    searchParams = null;
+  }
+  const startPortId = searchParams?.get('startPortId') || stringInput(inputs, 'startPortId', 'shanghai');
+  const destinationPortId = searchParams?.get('destinationPortId') || stringInput(inputs, 'destinationPortId', 'rotterdam');
+  const speedKnots = Number(searchParams?.get('speedKnots') ?? numberInput(inputs, 'speedKnots', 18));
+  return {
+    startPortId,
+    destinationPortId,
+    speedKnots: Number.isFinite(speedKnots) && speedKnots > 0 ? speedKnots : 18,
+  };
+}
+
+function cargoRoutePlanFromVariables(variables: Record<string, unknown>, url: string) {
+  const params = cargoInputParams(variables, url);
+  return buildCargoRoutePlan({
+    ...params,
+    includeAlternatives: true,
+  });
+}
+
+function resolveCargoDemoDataSource(
+  source: WorldBuilderDataSource,
+  url: string,
+  method: string,
+  variables: Record<string, unknown>,
+) {
+  const isCargoUrl = url.includes('/api/demo/cargo-climate/');
+  const isCargoSource = isCargoUrl || ['routeGraph', 'routePlan', 'routeProgress', 'weatherSample'].includes(source.id);
+  if (!isCargoSource) return null;
+
+  try {
+    if (source.id === 'routeGraph' || source.type === 'route_graph' || url.includes('/cargo-climate/routes')) {
+      const graph = getCargoRouteGraph();
+      const defaultPlan = buildCargoRoutePlan({
+        startPortId: 'shanghai',
+        destinationPortId: 'rotterdam',
+        speedKnots: 18,
+        includeAlternatives: true,
+      });
+      return withResponseAlias({
+        ok: true,
+        status: 200,
+        url,
+        method,
+        body: {
+          graph: {
+            ...graph,
+            routeAlternatives: defaultPlan.alternatives,
+            corridorIds: Array.from(new Set(graph.edges.map((edge) => edge.zoneId))),
+            chokepoints: graph.waypoints.filter((waypoint) => waypoint.kind === 'chokepoint'),
+          },
+          source: 'static-json-local',
+        },
+      });
+    }
+
+    if (source.id === 'routePlan' || source.type === 'route_plan' || url.includes('/cargo-climate/route-plan')) {
+      return withResponseAlias({
+        ok: true,
+        status: 200,
+        url,
+        method,
+        body: {
+          routePlan: cargoRoutePlanFromVariables(variables, url),
+          source: 'static-json-local',
+        },
+      });
+    }
+
+    if (source.id === 'routeProgress' || source.type === 'route_progress' || url.includes('/cargo-climate/progress')) {
+      const routePlan = cargoRoutePlanFromVariables(variables, url);
+      const progress = projectCargoProgress(routePlan, {
+        hoursAhead: searchNumber(url, 'hours') ?? 2,
+        distanceTravelledNm: searchNumber(url, 'distanceTravelledNm') ?? 0,
+      });
+      return withResponseAlias({
+        ok: true,
+        status: 200,
+        url,
+        method,
+        body: {
+          progress,
+          routePlan,
+          source: 'static-json-local',
+        },
+      });
+    }
+
+    if (source.id === 'weatherSample' || url.includes('/cargo-climate/weather-sample')) {
+      const routeProgress = objectValue(readPath(variables, 'dataSources.routeProgress.body.progress'));
+      const projected = objectValue(routeProgress.projectedPosition);
+      const latitude = searchNumber(url, 'lat') ?? Number(projected.latitude);
+      const longitude = searchNumber(url, 'lon') ?? Number(projected.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return withResponseAlias({
+          ok: false,
+          status: 422,
+          url,
+          method,
+          error: 'Route progress did not resolve projected latitude/longitude. Check start port, destination port, speed, and route API status.',
+        });
+      }
+      const hourOffset = searchNumber(url, 'hourOffset') ?? 2;
+      const weather = createWeatherSample({
+        hourOffset,
+        latitude,
+        longitude,
+        distanceFromStartNm: Number(routeProgress.distanceTravelledNm ?? 0),
+        lane: typeof routeProgress.currentSegment === 'object' && routeProgress.currentSegment
+          ? String((routeProgress.currentSegment as Record<string, unknown>).lane ?? 'public-demo-weather')
+          : 'public-demo-weather',
+        zoneId: typeof routeProgress.projectedPosition === 'object' && routeProgress.projectedPosition
+          ? String((routeProgress.projectedPosition as Record<string, unknown>).zoneId ?? 'public-demo-weather')
+          : 'public-demo-weather',
+      });
+      return withResponseAlias({
+        ok: true,
+        status: 200,
+        url,
+        method,
+        body: {
+          ...weather,
+          weather,
+          source: 'static-json-local',
+        },
+      });
+    }
+  } catch (error) {
+    return withResponseAlias({
+      ok: false,
+      status: 400,
+      url,
+      method,
+      error: error instanceof Error ? error.message : 'Unable to resolve Cargo demo data source.',
+    });
+  }
+
+  return null;
+}
+
 async function resolveDataSource(
   source: WorldBuilderDataSource,
   sourceConfig: TriggerSourceConfig | undefined,
   variables: Record<string, unknown>,
   fetchDataSources: boolean,
+  baseUrl?: string | URL,
 ) {
   if (!source.url) return withResponseAlias({ skipped: true, reason: 'No URL configured.' });
-  const url = absoluteUrl(interpolateUrl(source.url, variables));
+  const url = absoluteUrl(interpolateUrl(source.url, variables), baseUrl);
   const method = source.method ?? 'GET';
+  const cargoSnapshot = resolveCargoDemoDataSource(source, url, method, variables);
+  if (cargoSnapshot) return cargoSnapshot;
+  const emptyParams = emptyCoordinateQueryParams(url);
+  if (emptyParams.length > 0) {
+    return withResponseAlias({
+      ok: false,
+      url,
+      method,
+      error: `URL query value(s) are empty: ${emptyParams.join(', ')}.`,
+    });
+  }
   if (!fetchDataSources) return withResponseAlias({ skipped: true, url, method, reason: 'Preview resolution did not fetch the data source.' });
 
   const init: RequestInit = { method };
@@ -173,6 +395,7 @@ function resolveStepForTrigger(
   trigger: WorldBuilderTrigger,
   index: number,
   variables: Record<string, unknown>,
+  baseUrl?: string | URL,
 ): WorldBuilderAgentStep {
   const resolvedId = `${step.id}__${trigger.id}__${index}`;
   const defaultedStep = applyLiveAgentStepDefaults(step, String(objectValue(variables.runtime).slug ?? 'custom'));
@@ -187,8 +410,8 @@ function resolveStepForTrigger(
   };
   if (typeof defaultedStep.toolInputTemplate === 'string') next.toolInputTemplate = stripUnresolvedTemplates(interpolatePlain(defaultedStep.toolInputTemplate, variables));
   if (typeof record.systemPrompt === 'string') next.systemPrompt = stripUnresolvedTemplates(interpolatePlain(record.systemPrompt, variables));
-  if (typeof record.url === 'string') next.url = resolveUrlField(record.url, variables);
-  if (typeof record.urlTemplate === 'string') next.urlTemplate = resolveUrlField(record.urlTemplate, variables);
+  if (typeof record.url === 'string') next.url = resolveUrlField(record.url, variables, baseUrl);
+  if (typeof record.urlTemplate === 'string') next.urlTemplate = resolveUrlField(record.urlTemplate, variables, baseUrl);
   if (typeof record.selector === 'string') next.selector = stripUnresolvedTemplates(interpolatePlain(record.selector, variables));
   if (typeof record.prompt === 'string') next.prompt = stripUnresolvedTemplates(interpolatePlain(record.prompt, variables));
   if (typeof record.contextTemplate === 'string') next.contextTemplate = stripUnresolvedTemplates(interpolatePlain(record.contextTemplate, variables));
@@ -197,21 +420,47 @@ function resolveStepForTrigger(
 }
 
 export async function resolveBuilderForManifestCore(options: ResolveOptions): Promise<{ builder: WorldBuilderConfig; snapshot: LiveResolutionSnapshot }> {
-  const builder = applyLiveBuilderAgentDefaults(options.builder, options.builder.uiSlug);
+  const builder = applyLiveBuilderAgentDefaults(options.builder, builderTemplateSlug(options.builder));
   const inputs = inputDefaults(builder, options.inputs);
   const publicState = options.publicState ?? {};
   const dataSources: Record<string, unknown> = {};
   const triggerPayloads: Record<string, unknown> = {};
   const sourceSnapshots: Record<string, unknown> = {};
   const fetchDataSources = options.fetchDataSources ?? false;
+  const baseUrl = options.baseUrl;
 
-  for (const source of builder.dataSources ?? []) {
+  const pendingSources = [...(builder.dataSources ?? [])];
+  while (pendingSources.length > 0) {
+    const readyIndex = pendingSources.findIndex((source) => (
+      !source.id ||
+      dataSources[source.id] ||
+      dataSourceDependencyIds(source).every((id) => Boolean(dataSources[id]))
+    ));
+    if (readyIndex < 0) {
+      for (const source of pendingSources.splice(0)) {
+        if (!source.id || dataSources[source.id]) continue;
+        const missing = dataSourceDependencyIds(source).filter((id) => !dataSources[id]);
+        dataSources[source.id] = withResponseAlias({
+          ok: false,
+          skipped: true,
+          url: source.url ? absoluteUrl(interpolateUrl(source.url, {
+            runtime: { inputs },
+            worldState: publicState,
+            dataSources,
+          }), baseUrl) : undefined,
+          method: source.method ?? 'GET',
+          error: `Data source dependencies not resolved: ${missing.join(', ')}.`,
+        });
+      }
+      break;
+    }
+    const [source] = pendingSources.splice(readyIndex, 1);
     if (!source.id || dataSources[source.id]) continue;
     dataSources[source.id] = await resolveDataSource(source, undefined, {
       runtime: { inputs },
       worldState: publicState,
       dataSources,
-    }, fetchDataSources);
+    }, fetchDataSources, baseUrl);
   }
 
   const resolvedDataSourceConfigs = (builder.dataSources ?? []).map((source) => {
@@ -244,7 +493,7 @@ export async function resolveBuilderForManifestCore(options: ResolveOptions): Pr
     const chain = (trigger.agentChain ?? []).map((stepId, stepIndex) => {
       const step = builder.agentChain.find((item) => item.id === stepId || item.agentId === stepId || item.toolId === stepId);
       if (!step) return stepId;
-      const resolved = resolveStepForTrigger(step, trigger, stepIndex, variables);
+      const resolved = resolveStepForTrigger(step, trigger, stepIndex, variables, baseUrl);
       resolvedSteps.push(resolved);
       return resolved.id;
     });

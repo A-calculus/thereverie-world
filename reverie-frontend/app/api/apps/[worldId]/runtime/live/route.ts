@@ -8,6 +8,7 @@ import { resolveBuilderForServerManifest } from '@/lib/server/live-builder-resol
 import { evmAddressUrl } from '@/lib/shared/explorer-links';
 import { getVerifiedWorldBalance, hydrateCompiledManifestState, verifyWorldContract } from '@/lib/server/live-runtime-verification';
 import { buildRuntimeTimeline } from '@/lib/server/runtime-timeline';
+import { mergeReconciledManifestState } from '@/lib/server/reconciled-effects';
 
 interface Params {
   params: Promise<{ worldId: string }>;
@@ -70,6 +71,12 @@ export async function GET(_req: Request, { params }: Params) {
   const liveManifestState = contractAddress
     ? await hydrateCompiledManifestState({ address: contractAddress, manifest }).catch(() => null)
     : null;
+  const live = objectValue(state.live);
+  const mergedManifestState = mergeReconciledManifestState({
+    manifestState: liveManifestState,
+    builder,
+    effects: live.reconciledEffects,
+  });
   const fundingWarnings = (requests ?? []).flatMap((request) => {
     const result = objectValue(request.result);
     const receiptDetails = objectValue(result.receiptDetails);
@@ -93,10 +100,13 @@ export async function GET(_req: Request, { params }: Params) {
     builder,
     manifest,
     resolvedInputSnapshot,
-    liveManifestState,
+    liveManifestState: mergedManifestState,
     deployment: objectValue(state.deployment),
-    live: objectValue(state.live),
-    reconcileCheckpoint: objectValue(objectValue(state.live).reconcileCheckpoint),
+    live: {
+      ...live,
+      mergedManifestState,
+    },
+    reconcileCheckpoint: objectValue(live.reconcileCheckpoint),
     runtime: objectValue(state.runtime),
     latestRun: state.latestRun ?? null,
     deployments: deployments ?? [],
