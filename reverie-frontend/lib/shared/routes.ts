@@ -1,4 +1,4 @@
-import { configuredBaseUrl, parseBaseUrl as parseConfiguredBaseUrl } from '@/lib/shared/base-url';
+import { configuredBaseUrl, parseBaseUrl as parseConfiguredBaseUrl, usesSubdomainRouting } from '@/lib/shared/base-url';
 
 export type MainSection = 'docs' | 'agents' | 'apps' | 'marketplace' | 'tools' | 'mcp';
 
@@ -25,16 +25,15 @@ function parseBaseUrl() {
   return parseConfiguredBaseUrl();
 }
 
-function supportsCanonicalSubdomains(base: URL) {
-  return Boolean(base.hostname);
+function sectionPath(section: MainSection, path = '/') {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${internalSectionPath[section]}${normalizedPath === '/' ? '' : normalizedPath}`;
 }
 
 function withSubdomain(subdomain: MainSection, path = '/') {
   const base = parseConfiguredBaseUrl();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  if (!base || !supportsCanonicalSubdomains(base)) {
-    return `${internalSectionPath[subdomain]}${normalizedPath === '/' ? '' : normalizedPath}`;
-  }
+  if (!usesSubdomainRouting(base)) return sectionPath(subdomain, normalizedPath);
   const url = new URL(base.toString());
   url.hostname = `${subdomain}.${base.hostname.replace(/^(docs|agents|apps|marketplace|tools|mcp)\./, '')}`;
   url.pathname = normalizedPath;
@@ -74,7 +73,7 @@ export function appsUrl(path = '/') {
 
 export function homeUrl() {
   const base = parseConfiguredBaseUrl();
-  if (!base || !supportsCanonicalSubdomains(base)) return '/';
+  if (!usesSubdomainRouting(base)) return '/';
   base.pathname = '/';
   base.search = '';
   base.hash = '';
@@ -83,7 +82,7 @@ export function homeUrl() {
 
 export function dashboardUrl() {
   const base = parseBaseUrl();
-  if (!base || !supportsCanonicalSubdomains(base)) return '/dashboard';
+  if (!base || !usesSubdomainRouting(base)) return '/dashboard';
   base.pathname = '/dashboard';
   base.search = '';
   base.hash = '';
@@ -92,7 +91,7 @@ export function dashboardUrl() {
 
 export function loginUrl(redirect?: string) {
   const base = parseBaseUrl();
-  if (!base || !supportsCanonicalSubdomains(base)) {
+  if (!base || !usesSubdomainRouting(base)) {
     return redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login';
   }
   base.pathname = '/login';
@@ -111,6 +110,7 @@ export function appRouteUrl(path: string | null | undefined) {
 
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
     const base = parseConfiguredBaseUrl();
+    if (!usesSubdomainRouting(base)) return `${pathname}${search}`;
     base.pathname = pathname;
     base.search = query;
     base.hash = '';
@@ -139,6 +139,7 @@ export function appRouteUrl(path: string | null | undefined) {
   }
 
   const base = parseConfiguredBaseUrl();
+  if (!usesSubdomainRouting(base)) return `${pathname.startsWith('/') ? pathname : `/${pathname}`}${search}`;
   base.pathname = pathname.startsWith('/') ? pathname : `/${pathname}`;
   base.search = query;
   base.hash = '';
@@ -149,7 +150,7 @@ export function worldUrl(world: { id: string; name?: string | null; slug?: strin
   const base = parseBaseUrl();
   const worldSlug = slugifyRoute(world.slug || world.name || world.id);
   const normalizedChildPath = childPath ? (childPath.startsWith('/') ? childPath : `/${childPath}`) : '';
-  if (!base || !supportsCanonicalSubdomains(base)) return `/apps/${world.id}${normalizedChildPath}`;
+  if (!base || !usesSubdomainRouting(base)) return `/apps/${world.id}${normalizedChildPath}`;
   const url = new URL(base.toString());
   url.hostname = `${worldSlug}.app.${base.hostname.replace(/^(docs|agents|apps|marketplace|tools|mcp)\./, '').replace(/^app\./, '')}`;
   url.pathname = `/${world.id}${normalizedChildPath}`;

@@ -56,13 +56,13 @@ export function toolRunPath(tool: Pick<ToolSummary, 'id' | 'slug'>) {
 }
 
 export function toolRunUrl(tool: Pick<ToolSummary, 'id' | 'slug'>, token?: string) {
-  const url = new URL(toolsUrl(toolRunPath(tool)));
+  const url = new URL(toolsUrl(toolRunPath(tool)), parseBaseUrl());
   if (token) url.searchParams.set('token', token);
   return url.toString();
 }
 
 export function mcpCapabilityUrl(capabilityId: string, token: string) {
-  const url = new URL(mcpUrl(`/${capabilityId}`));
+  const url = new URL(mcpUrl(`/${capabilityId}`), parseBaseUrl());
   url.searchParams.set('token', token);
   return url.toString();
 }

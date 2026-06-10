@@ -1,169 +1,98 @@
-# REVERIE — Agent-Driven Autonomous Worlds on Somnia
+# REVERIE — The Operating System for Autonomous On-Chain Intelligence
 
-> **Challenge:** Build the most novel and high-impact agent-driven application on Somnia
+> **We are building the intelligence and infrastructure layer for autonomous on-chain systems.** REVERIE is the operating system that makes it possible to run reactive, AI-powered logic entirely on-chain — not just for virtual worlds, but for any system that needs autonomous, consensus-verified decision-making. By leveraging Somnia’s native L1 architecture, REVERIE moves the intelligence layer fully on-chain.
 
-## Project Overview
+**Our deliverable is twofold:**
+1. **`@worldframe/sdk`**: The underlying TypeScript infrastructure allowing developers direct, type-safe access to Somnia's Native L1 Agents plus four custom REVERIE agents to connect smart contracts to AI reasoning through Somnia's network.
+2. **REVERIE**: A no-code frontend platform where anyone can build autonomous, self-sustaining systems integrated with real-world data feeds — zero smart contract coding required. Configure triggers, connect data feeds, define agent behaviors, and deploy to testnet with one click.
 
-REVERIE is a full-stack framework for building autonomous, agent-driven systems on the Somnia blockchain. It combines seven specialized AI agents, a TypeScript SDK, smart contracts, and a Vercel-ready no-code frontend so users can connect real-world data, reason with consensus-verified AI, configure workflows, and inspect receipts without writing Solidity.
+---
 
-The platform has two deliverables:
+## The Problem: Intelligence Lives Off-Chain
 
-- `@worldframe/sdk`: infrastructure for developers who want direct TypeScript access to Somnia native agents, REVERIE world agents, manifest deployment helpers, triggers, typed results, receipt handling, and browser wallet execution.
-- REVERIE frontend: a browser platform where users connect a wallet, link GitHub, configure agents and worlds, manage tools/MCP capabilities, use official templates, and inspect Proof-of-Thought receipts.
+Today, every "intelligent" blockchain application has the same architectural flaw: the intelligence layer — including AI reasoning, real-world data feeds, reactive triggers, and world logic — lives off-chain.
 
-## Why It Matters
+1. **Virtual worlds**: NPCs run on centralized game servers, not on-chain.
+2. **DeFi automation**: "Smart" trading bots run in centralized infrastructure.
+3. **AI experiences**: LLM inference happens on private AI company servers, unverified on-chain.
+4. **Reactive systems**: Monitoring and triggering depend on external systems like Chainlink keepers.
 
-Most intelligent blockchain applications still run their intelligence off-chain: private game servers, centralized trading bots, hosted AI services, or external keepers. REVERIE moves that intelligence toward Somnia's L1 agent infrastructure, where AI results and external data requests can be inspected through transactions and receipts.
+**The consequence:** You're trusting a company's server logs instead of cryptographic consensus. There is no cryptographic proof that the AI actually made the decision it claims to have made, or that the logic wasn't tampered with mid-run.
 
-## Novelty
+---
 
-1. **Seven integrated agents**
-   - 3 Somnia native agents: LLM Inference, JSON API Request, LLM Parse Website.
-   - 4 REVERIE agents: Chronicle, Zone Climate, Faction Morale, Conflict Resolution.
-2. **Dual execution model**
-   - SDK lane for direct SomniaAgentKit execution and callback results.
-   - Contract lane for world contracts and Reactivity-aware workflows.
-3. **No-code configuration**
-   - Wallet login, optional GitHub profile linking, agent creation/testing, official templates, world builder, triggers, tools, MCP, and receipt inspection.
-4. **Browser-safe SDK integration**
-   - The frontend injects a viem `walletClient` from the connected wallet. Users are never asked for private keys.
-5. **Subdomain product UX**
-   - `docs.<base-host>`, `agents.<base-host>`, `apps.<base-host>`, `marketplace.<base-host>`, `tools.<base-host>`, `mcp.<base-host>`, and `{worldSlug}.app.<base-host>`.
+## The Solution: On-Chain Operating System
 
-## Technical Architecture
+We are building the operating system for autonomous on-chain intelligence. REVERIE lets developers run AI-powered, reactive logic without managing centralized infrastructure.
+
+**The difference:** Lambda runs in Amazon's data centers. REVERIE runs on Somnia's L1, verified by validator consensus.
+
+### 1. `@worldframe/sdk` (The Infrastructure Layer)
+The pipes and plumbing for developers:
+- **Seven agents**: 3 native Somnia primitives (LLM, JSON API, Web Parse) + 4 custom REVERIE agents.
+- **Two execution lanes**: SDK-based (browser/testing) and fully autonomous on-chain execution.
+- **Hybrid reactivity system**: Off-chain polling combined with on-chain subscriptions via Somnia's Reactivity Precompile.
+- **Embedded `SomniaAgentKit`**: Configured for validator consensus and automatic STT deposit management.
+- **Full TypeScript support**: Type safety and runtime validation out of the box.
+
+### 2. REVERIE (The Consumer Platform)
+The accessible, no-code interface for everyone:
+- **Visual no-code builder**: Connect zones, factions, agents, and triggers via a drag-and-drop UI.
+- **One-click deployment**: Compiles configuration into a deterministic manifest deployed to the testnet.
+- **Live event monitoring**: Inspect real-time actions and view "Proof of Thought" cryptographic receipts.
+- **Template marketplace**: Start instantly with production-ready templates (e.g., fantasy kingdoms, cyberpunk markets, custom).
+
+---
+
+## Why This Matters
+
+Together, the SDK and platform make it possible to deploy autonomous systems that:
+1. **React to real-world data** instantly
+2. **Make consensus-verified decisions** without trusted third parties
+3. **Persist indefinitely on-chain**
+4. **Run without human intervention**
+5. **Provide cryptographic proof** of every decision through an auditable receipt
+
+Once deployed and funded, a REVERIE system is a self-sustaining on-chain entity.
+
+### Use Cases
+The potential spans far beyond simple games. Use REVERIE for:
+- DeFi Automation and Crisis Hedging
+- Dynamic Gaming and Living Worlds
+- Social Token Mechanics
+- AI-Powered NFT Evolution
+- DAOs and Governance Resolvers
+- Prediction Markets
+- Parametric Insurance Settlements
+- Supply Chain Sentiment Analysis
+
+...and anywhere else where verifiable intelligence and reactivity create value.
+
+---
+
+## Technical Implementation (Phase 1 & Phase 2)
+
+REVERIE is a fully delivered suite encompassing both smart contracts and consumer platform.
 
 | Component | Technology | Purpose |
-|-----------|------------|---------|
-| `contracts/` | Solidity, Hardhat | Testnet contracts for registry, worlds, callbacks, libraries, and Reactivity helpers. |
-| `sdk/` | TypeScript, tsup, viem | Developer SDK for worlds, agents, callbacks, validation, metadata, and receipts. |
-| `reverie/` | Node.js ESM scripts | E2E scripts for native agents, REVERIE agents, and world deployment checks. |
-| `reverie-frontend/` | Next.js 16, Supabase, React Query | No-code frontend for auth, agents, worlds, templates, tools, docs, and receipts. |
+|-----------|-----------|---------|
+| `contracts/` | Solidity | On-chain execution. `ReverieRegistry`, `ReverieWorldInstance`, `CallbackReceiver`, and Reactivity libraries. |
+| `sdk/` | TypeScript, viem | `@worldframe/sdk`. Direct access to agents, world deployment, trigger management, and WS events. |
+| `reverie-frontend/` | Next.js 16, Supabase, Tailwind | The no-code visual builder, marketplace, dashboard, and documentation hub. |
 
-## Implementation Status
+### How a Decision is Made (Proof of Thought)
+When a REVERIE system needs to act (e.g., weather data hits a threshold):
+1. **Trigger fires**: Reactivity triggers the on-chain contract.
+2. **Agent requested**: The world contract requests an LLM decision, funding the deposit with its STT balance.
+3. **Consensus execution**: Independent Somnia validators process the LLM request.
+4. **State updated**: The contract's callback receives the consensus result and updates world state.
+5. **Receipt generated**: A cryptographic receipt is published, proving exactly how the decision was made.
 
-### Phase 1: Smart Contracts Complete
+This guarantees that the logic governing your application is as trustless and verifiable as the tokens living inside it.
 
-- `ReverieRegistry.sol` for deploying and tracking worlds.
-- `ReverieWorldInstance.sol` as a thin world facade.
-- `CallbackReceiver.sol` for native-agent callback responses.
-- Libraries for world state, chronicles, data oracles, native agents, and Reactivity.
-- Interfaces for Somnia agent requests and callback payloads.
+---
 
-### Phase 2: SDK Complete
-
-- `WorldFrameSDK` main entry point.
-- `WorldInstance` for deployed-world operations.
-- `SomniaAgentKit` for low-level native-agent execution with WebSocket and polling result handling.
-- Native-agent method support for all available LLM, JSON API, and Web Parse methods.
-- REVERIE agent classes for Chronicle, Zone Climate, Faction Morale, and Conflict Resolution.
-- Browser entrypoint with injected wallet-client support.
-- Live manifest compiler, `deployWorldManifest()`, and `WorldInstance` lifecycle helpers for wallet-signed deployment, funding, arming, stopping, subscriptions, and manual triggers.
-- SDK metadata exports for official agents, world styles, runtime defaults, and deterministic zone IDs.
-
-### Phase 2: Frontend Implemented
-
-- Vercel-ready Next.js 16 app.
-- Live wallet authentication and shared session cookies.
-- Optional Supabase GitHub OAuth profile linking.
-- Supabase-backed durable users, agents, official SDK-agent settings, worlds, templates, triggers, tools, secrets, and events.
-- Native-agent creation and live testing through connected browser wallets.
-- Live world deployment and lifecycle controls through the injected wallet and SDK manifest flow.
-- Contract-funded native-agent workflows that calculate the platform deposit, runner fee, and buffer per agent call before sending value from the world contract.
-- Chunked live runtime reconciliation for workflow events, request ids, callback statuses, RPC balance, and receipt details.
-- Official template marketplace.
-- World builder surfaces for zones, factions, allocation-derived manifest weights, triggers, data sources, runtime inputs, event logs, and state effects.
-- Tools and MCP capability management.
-- Markdown-powered docs with section navigation.
-- Browser cache for profile/project data to reduce repeated Supabase reads.
-- Receipt links in the Somnia agent explorer format.
-
-### E2E And Verification
-
-- Native agent scripts test LLM, JSON API, Web Parse, and non-default native methods.
-- REVERIE agent scripts test Chronicle, Zone Climate, Faction Morale, and Conflict Resolution.
-- Frontend Playwright smoke tests cover landing, protected routes, subdomain docs, agent wizard, world creation, and world detail surfaces.
-
-## User Flow
-
-1. Connect a browser wallet.
-2. Optionally link GitHub for profile identity.
-3. Create or choose an agent.
-4. Run a live native-agent test and inspect the receipt.
-5. Create a world from an official template.
-6. Configure zones, factions, triggers, data sources, tools, and runtime inputs.
-7. Deploy, fund, arm, stop, update, and manually trigger the world through wallet-signed calls.
-8. Open world pages through the app subdomain UX.
-9. Inspect events, request cards, reconciliation state, and Proof-of-Thought receipts.
-
-## Vercel Deployment
-
-The frontend is designed for one Vercel project with a canonical root domain and section subdomains:
-
-```text
-<base-host>
-docs.<base-host>
-agents.<base-host>
-apps.<base-host>
-marketplace.<base-host>
-tools.<base-host>
-mcp.<base-host>
-*.app.<base-host>
-```
-
-The required frontend environment includes Supabase, GitHub OAuth, Somnia RPC/callback receivers, `NEXT_PUBLIC_REVERIE_BASE_URL`, and a server-only secret encryption key.
-
-## Key Features
-
-### Native Somnia Agents
-
-| Agent | Function | Use case |
-|-------|----------|----------|
-| LLM Inference | `executeLLM()` | Natural language reasoning, bounded numeric inference, chat, and tool-chat. |
-| JSON API Request | `executeJsonApi()` | Public API data extraction through selector paths. |
-| Web Parse | `executeWebParse()` | Structured extraction from webpages. |
-
-### REVERIE Agents
-
-| Agent | Function | Use case |
-|-------|----------|----------|
-| Chronicle | `invoke()` | Generate narrative entries for world events. |
-| Zone Climate | `invoke()` | Determine zone climate from real weather data and LLM reasoning. |
-| Faction Morale | `invoke()` | Update faction morale from market/state context. |
-| Conflict Resolution | `invoke()` | Resolve disputes between factions or world actors. |
-
-### Receipts
-
-Every live native-agent request returns an auditable receipt when a request id is available:
-
-```text
-https://agents.testnet.somnia.network/receipts/{requestId}
-```
-
-## Performance And Economics
-
-| Agent | Estimated cost | Execution time |
-|-------|----------------|----------------|
-| LLM | ~0.24 STT | 5-30 seconds |
-| JSON API | ~0.12 STT | 3-15 seconds |
-| Web Parse | ~0.33 STT | 10-60 seconds |
-| Chronicle | ~0.24 STT | 5-30 seconds |
-| Zone Climate | ~0.36 STT | 8-45 seconds |
-| Faction Morale | ~0.48 STT | 10-60 seconds |
-| Conflict Resolution | ~0.24 STT | 5-30 seconds |
-
-Costs include platform deposits, runner/network buffers, and contract-side overfunding where needed. Excess STT is refunded automatically by the platform.
-
-## Roadmap
-
-- Mainnet deployment planning.
-- Agent reputation and marketplace trust signals.
-- More official templates for DeFi, insurance, supply chain, gaming, social tokens, DAOs, prediction markets, and AI NFTs.
-- Expanded human-in-the-loop review patterns.
-- Deeper on-chain Reactivity workflows as Somnia infrastructure evolves.
-
-## Acknowledgments
-
-- Somnia Network for the agent infrastructure.
-- Viem for TypeScript Ethereum primitives.
-- Supabase for auth and durable app storage.
-- Vercel for frontend hosting.
+## Quick Links
+- **[reverie-frontend/README.md](reverie-frontend/README.md)**: Details on the Next.js platform architecture and local setup.
+- **[Getting Started Docs](reverie-frontend/content/docs/getting-started.md)**: Full platform user guide.
+- **[worldframe-sdk-spec.md](worldframe-sdk-spec.md)**: Deep dive into the TypeScript infrastructure layer.

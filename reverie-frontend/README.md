@@ -1,137 +1,117 @@
 # REVERIE Frontend
 
-`reverie-frontend` is the Phase 2 no-code interface for REVERIE. It lets users connect a wallet, optionally link GitHub, create and test Somnia-native agents, configure worlds from official templates, manage tools/MCP surfaces, inspect receipts, and navigate the product through Vercel-ready subdomains.
+> **We are building the intelligence and infrastructure layer for autonomous on-chain systems.** It is the Operating system that makes it possible to run reactive, AI-powered logic entirely on-chain, not just for virtual worlds, but for any system that needs autonomous, consensus-verified decision-making. REVERIE moves this logic fully on-chain, leveraging Somnia’s native L1 architecture.
 
-## Architecture
+This repository (`reverie-frontend`) contains the **consumer platform** for the REVERIE ecosystem.
 
-- **Framework:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4.
-- **Auth:** injected wallet signature creates the HTTP-only `reverie-session` cookie; GitHub OAuth enriches the Supabase profile.
-- **Data:** Supabase stores users, agents, SDK-agent preferences, worlds, templates, triggers, tools, secrets, and event history.
-- **Agent execution:** browser native-agent tests create a viem wallet client from the connected wallet and pass it into `@worldframe/sdk/browser`; no frontend private key is used.
-- **World execution:** published builders compile into live manifests, deploy through the browser SDK, fund through `WorldInstance.fund()`, and arm/stop/manual-trigger through wallet-signed lifecycle calls.
-- **Runtime verification:** completion and reconciliation APIs verify wallet-signed transactions, chunk RPC log scans, refresh balances, and fetch Proof-of-Thought receipt details from Somnia's receipt service.
-- **Client cache:** React Query, Zustand, and browser `localStorage` reduce repeated Supabase reads for profile, agents, worlds, tools, and opened details.
-- **Docs:** markdown content in `content/docs` is rendered through the in-app docs layout.
+## Our Deliverable is Twofold
+
+1. **`@worldframe/sdk`**: The underlying TypeScript infrastructure allowing developers direct, type-safe access to Somnia's Native L1 Agents plus four custom REVERIE agents to connect smart contracts to AI reasoning through Somnia's network.
+2. **REVERIE (This Frontend)**: A no-code frontend platform where anyone can build autonomous, self-sustaining systems integrated with real-world data feeds, zero smart contract coding required. Configure triggers, connect data feeds, define agent behaviors, deploy to testnet with one click.
+
+---
+
+## What We Are Building & Why
+
+Today, every "intelligent" blockchain application has the same architectural flaw: Intelligence (from AI reasoning, Real-world data feeds, Reactive triggers, including World logic) **Lives Off-Chain**.
+
+1. **Virtual worlds**: NPCs run on game servers, not on-chain.
+2. **DeFi automation**: "Smart" trading bots run in centralized infrastructure.
+3. **AI experiences**: LLM inference happens on AI's servers, not verified on-chain.
+4. **Reactive systems**: Monitoring and triggering happens via Chainlink keepers.
+
+**The consequence:** You're trusting a company's server logs instead of cryptographic consensus.
+
+We are building the operating system for autonomous on-chain intelligence. REVERIE lets developers run AI-powered, reactive logic without managing centralized infrastructure.
+
+**The difference:** Lambda runs in Amazon's data centers. REVERIE runs on Somnia's L1, verified by validator consensus.
+
+---
+
+## Platform Features
+
+The REVERIE consumer platform is the accessible interface for everyone (especially the 92% that doesn't need to write code to use the product/service).
+
+- **Visual no-code builder**: Connect zones, factions, agents, and data feeds visually.
+- **One-click deployment to testnet**: Compile your world into a manifest and deploy it to Somnia without writing Solidity.
+- **Live event monitoring with "Proof of Thought" receipts**: Every decision produces a cryptographic receipt proving the AI's logic was consensus-verified.
+- **Template marketplace**: Deploy instantly from pre-configured templates (fantasy, cyberpunk, DeFi automation, custom).
+- **Wallet-based auth**: Connect via EIP-1193 and get a shared `reverie-session` cookie across all subdomains.
+
+Together with the SDK, we make it possible to deploy autonomous systems that:
+1. **React to real-world data**
+2. **Make consensus-verified decisions**
+3. **Persist indefinitely on-chain**
+4. **Run without human intervention**
+5. **Provide cryptographic proof of every decision**
+
+### Why This Matters
+
+Once deployed and funded, a REVERIE system is a self-sustaining on-chain entity. 
+
+The use cases span DeFi Automation, gaming, social tokens mechanics, AI powered NFTs Evolution, DAOs, prediction markets, insurance, supply chain sentiment analysis, virtual worlds — anywhere intelligence and reactivity create value.
+
+---
 
 ## Local Development
 
-Use `lvh.me`, not plain `localhost`, when testing subdomains and shared cookies.
+The frontend supports Next.js 16 App Router, React 19, TypeScript, and Tailwind CSS v4. Database persistence is handled via Supabase.
+
+### Setup
+
+**Use `lvh.me:3000` instead of `localhost:3000`.** The `lvh.me` domain resolves to `127.0.0.1` and supports wildcard subdomains natively. This is strictly required for the shared-cookie subdomain authentication to work properly across the platform.
 
 ```bash
+cd reverie-frontend
 npm install
-cp .env.example .env
-npm run dev
+cp .env.example .env   # Fill in Supabase, GitHub OAuth, and Somnia RPC details
+npm run dev            # Starts on http://lvh.me:3000
 ```
 
-Open:
+### URL Structure (Subdomain Mode)
 
-```text
-http://lvh.me:3000
-http://docs.lvh.me:3000
-http://agents.lvh.me:3000
-http://apps.lvh.me:3000
-http://marketplace.lvh.me:3000
-http://tools.lvh.me:3000
-```
+Once running locally, the platform spans multiple subdomains:
+- `http://lvh.me:3000` - Landing and Dashboard
+- `http://apps.lvh.me:3000` - World creation and management
+- `http://agents.lvh.me:3000` - Agent wizard and testing
+- `http://marketplace.lvh.me:3000` - Official templates
+- `http://docs.lvh.me:3000` - Full documentation suite
+- `http://{slug}.app.lvh.me:3000` - Live world runtime monitoring
 
-The dev script binds Next to `lvh.me`:
-
-```json
-"dev": "next dev -H lvh.me"
-```
+---
 
 ## Environment Variables
 
-Required for durable production behavior:
+> **Security Note:** Never add `BUILDER_PRIVATE_KEY` or `DEPLOYER_PRIVATE_KEY` to the frontend environment. All blockchain transactions must be signed through the user's connected browser wallet.
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+# Core Platform
+NEXT_PUBLIC_REVERIE_BASE_URL=https://thereverie.world
+NEXT_PUBLIC_REVERIE_ROUTING_MODE=subdomain    # Use 'path' for free Vercel deployments
 
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
+# Supabase Auth & Database
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 
+# Somnia Infrastructure
 NEXT_PUBLIC_SOMNIA_TESTNET_RPC=https://api.infra.testnet.somnia.network/
-NEXT_PUBLIC_REVERIE_REGISTRY_ADDRESS=
-NEXT_PUBLIC_CALLBACK_RECEIVER_LLM=
-NEXT_PUBLIC_CALLBACK_RECEIVER_PRIMARY=
-
-NEXT_PUBLIC_REVERIE_BASE_URL=https://your-root-domain.example
-REVERIE_SECRETS_KEY=
-NEXT_PUBLIC_REVERIE_AGENT_FUND_BUFFER_PCT=100
-NEXT_PUBLIC_REVERIE_RECONCILE_BLOCK_CHUNK_SIZE=1000
+NEXT_PUBLIC_REVERIE_REGISTRY_ADDRESS=0x...
 SOMNIA_AGENT_RECEIPTS_BASE_URL=https://receipts.testnet.agents.somnia.host
-SOMNIA_AGENT_RECEIPTS_PLATFORM_ADDRESS=0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776
 ```
 
-Optional:
+---
 
-```bash
-NEXT_PUBLIC_SOMNIA_TESTNET_WS=wss://api.infra.testnet.somnia.network/ws
-SOMNIA_AGENT_TIMEOUT_MS=420000
-TOOL_SECRET_ENCRYPTION_KEY=
-```
+## E2E Testing & Verification
 
-Do not add builder or deployer private keys to the frontend environment. Browser transactions must be signed through the connected wallet.
-
-## Vercel Deployment
-
-Create one Vercel project from `reverie-frontend`.
-
-Recommended settings:
-
-```text
-Framework Preset: Next.js
-Build Command: npm run build
-Development Command: npm run dev
-Install Command: npm install
-Output Directory: .next
-```
-
-Configure `NEXT_PUBLIC_REVERIE_BASE_URL` to the canonical root URL, for example:
-
-```text
-https://thereverie.world
-```
-
-Then point these domains or wildcard records at the same Vercel project:
-
-```text
-thereverie.world
-docs.thereverie.world
-agents.thereverie.world
-apps.thereverie.world
-marketplace.thereverie.world
-tools.thereverie.world
-mcp.thereverie.world
-*.app.thereverie.world
-```
-
-The middleware keeps login and dashboard on the canonical root domain, redirects section routes to their subdomains, and rewrites subdomain requests internally so the browser address bar remains clean.
-
-## Verification
-
-Use the same loop before shipping documentation or code changes:
+Run this verification loop before pushing changes:
 
 ```bash
 rm -rf .next
-npm run lint
-npm run build
-npm run dev
-npm run test:e2e
+npm run lint          # ESLint with Next.js rules
+npm run build         # Production build check
+npm run dev &         # Run in background
+npm run test:e2e      # Run Playwright suite
 ```
 
-Stop the dev server after Playwright finishes.
-
-## Useful Files
-
-- `proxy.ts`: canonical redirects, protected routes, subdomain rewrites.
-- `lib/shared/base-url.ts`: canonical base URL and domain normalization.
-- `lib/server/auth-cookies.ts`: shared cookie domain and session cookie options.
-- `lib/client/query-cache.ts`: browser cache for profile and project data.
-- `lib/client/live-world.ts`: browser SDK wiring for live world deploy, funding, and lifecycle calls.
-- `lib/server/live-world.ts`: manifest preparation and JSON-safe live world summaries.
-- `lib/server/live-runtime-verification.ts`: RPC receipt, balance, and chunked log verification.
-- `lib/server/agent-receipts.ts`: receipt-service fetch and normalization.
-- `supabase/schema.sql`: reset-and-create Supabase schema for Phase 2.
+The Playwright suite covers protected routes, agent tests, official templates, builder config, and the runtime state reconciliation loop.

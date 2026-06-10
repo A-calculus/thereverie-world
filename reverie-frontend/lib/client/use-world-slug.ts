@@ -1,15 +1,14 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { worldSlugFromHost } from '@/lib/shared/base-url';
 
 export function useWorldSlugFromHost() {
   return useSyncExternalStore(
     () => () => undefined,
     () => {
       if (typeof window === 'undefined') return null;
-      const parts = window.location.hostname.split('.');
-      const appIndex = parts.indexOf('app');
-      return appIndex > 0 ? parts.slice(0, appIndex).join('.') : null;
+      return worldSlugFromHost(window.location.hostname);
     },
     () => null
   );

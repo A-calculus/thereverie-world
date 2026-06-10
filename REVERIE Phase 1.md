@@ -1,50 +1,78 @@
-# REVERIE Phase 1 — Seven-Agent Architecture
+# REVERIE Phase 1 — SDK & Smart Contract Foundation
 
-Phase 1 delivers modular Somnia testnet contracts, embedded `SomniaAgentKit`, **seven agents** (3 Somnia native + 4 REVERIE), two execution lanes, hybrid Reactivity triggers, and full SDK access to the available methods on each Somnia native agent.
+> **Phase 1 is the infrastructure layer.** It delivers the smart contracts, the `@worldframe/sdk`, and the seven-agent architecture that makes REVERIE's autonomous world execution possible. Phase 2 — the no-code REVERIE frontend — is built on this foundation and is **fully delivered**.
 
-## What works now
+See the root [README.md](README.md) for the complete project overview, or [reverie-frontend/README.md](reverie-frontend/README.md) for the consumer platform built on this foundation.
 
-- `contracts/` deploys the shared infrastructure and lets builders create new testnet worlds.
-- `sdk/` contains `@worldframe/sdk`; it pays STT deposits, submits native-agent requests, waits for callbacks, and returns typed results.
-- All 3 Somnia native agents are usable through the SDK: LLM inference, JSON public API, and LLM website parsing.
-- The native-agent calls support method selection, so builders can ask for text, numbers, booleans, arrays, chat responses, or web-extracted numbers depending on the job.
-- The 4 REVERIE agents sit on top as easier world tools: chronicle, zone climate, faction morale, and conflict resolution.
-- `reverie/` installs the local `worldframe-sdk-0.1.0.tgz` package and proves the whole flow end-to-end.
+---
 
-## Wallet roles
+## Why This Foundation Matters
 
-| Role | Env | Used for |
-|------|-----|----------|
+Most "intelligent" blockchain applications route AI reasoning through centralized servers. A decision is made off-chain, then the result is posted on-chain — you're trusting a company's server logs, not cryptographic consensus.
+
+Phase 1 eliminates that trust assumption entirely:
+
+- **Smart contracts** own callback addresses and pay agent deposits from their own STT balance
+- **`SomniaAgentKit`** wraps the native platform's `createAdvancedRequest` with TypeScript type safety, Zod validation, and WebSocket-based callback listening filtered by `requestId`
+- **Seven agents** cover LLM reasoning, external data fetching, web parsing, and four composite REVERIE world agents
+- **Two execution lanes** support developer testing (SDK direct) and fully autonomous on-chain operation
+
+> The result: AI decisions are made by multiple independent validator nodes reaching consensus — not a private server. Every execution produces a cryptographic receipt auditable at `https://agents.testnet.somnia.network/receipts/{requestId}`.
+
+---
+
+## What Phase 1 Delivers
+
+- `contracts/` deploys the shared infrastructure and lets builders create new testnet worlds
+- `sdk/` contains `@worldframe/sdk` — it pays STT deposits, submits native-agent requests, waits for callbacks, and returns typed results
+- All 3 Somnia native agents are accessible through the SDK: LLM inference, JSON public API, and LLM website parsing
+- Native-agent calls support method selection — builders can request text, numbers, booleans, arrays, chat responses, or web-extracted values depending on the job
+- The 4 REVERIE agents sit on top as world-focused tools: Chronicle, Zone Climate, Faction Morale, and Conflict Resolution
+- `reverie/` installs the local `worldframe-sdk-0.1.0.tgz` package and proves the whole flow end-to-end
+
+---
+
+## Wallet Roles
+
+| Role | Environment Variable | Used For |
+|------|---------------------|----------|
 | **Deployer** | `contracts/.env` → `DEPLOYER_PRIVATE_KEY` | `npx hardhat run scripts/deploy.ts` (CallbackReceiver + Registry only) |
 | **Builder** | `sdk/.env` → `BUILDER_PRIVATE_KEY` or browser wallet | `deployWorld`, agent STT deposits, triggers, world `owner` |
 
-Never use the deployer key in the browser SDK.
+> [!CAUTION]
+> Never use the deployer key in the browser SDK or in `sdk/.env`. These are separate roles with separate security boundaries.
+
+---
 
 ## 1. Contracts (`contracts/`)
 
-- **`CallbackReceiver.sol`** — shared callback per platform address
-- **`ReverieWorldInstance.sol`** — facade delegating to libraries; `SomniaNativeAgentsLib` routes LLM / JSON API / Web Parse via `createAdvancedRequest`
-- **`ReverieRegistry.sol`** — `deployWorld` sets `owner = msg.sender` (builder)
-- Events: `NativeAgentRequested`, `AgentDecisionReceived`, `ReactivitySubscribed`
-- On-chain triggers: `subscribeToEvent` / `unsubscribeFromEvent` (Reactivity precompile `0x0100`)
+### What's Deployed
 
-Deploy:
+- **`CallbackReceiver.sol`** — shared, stateless callback contract per platform address
+- **`ReverieWorldInstance.sol`** — thin world facade delegating to libraries; `SomniaNativeAgentsLib` routes LLM / JSON API / Web Parse via `createAdvancedRequest`
+- **`ReverieRegistry.sol`** — `deployWorld` sets `owner = msg.sender` (the builder wallet)
+- Events: `NativeAgentRequested`, `AgentDecisionReceived`, `ReactivitySubscribed`
+- On-chain triggers: `subscribeToEvent` / `unsubscribeFromEvent` via Reactivity precompile `0x0100`
+
+### Deploy
 
 ```bash
 cd contracts
-cp .env.example .env   # DEPLOYER_PRIVATE_KEY
+cp .env.example .env   # add DEPLOYER_PRIVATE_KEY
 npx hardhat compile
 npx hardhat run scripts/deploy.ts --network somniaTestnet
 ```
 
-Copy printed addresses into `sdk/.env`.
+Copy the printed addresses into `sdk/.env`.
+
+---
 
 ## 2. SDK (`sdk/`)
 
-### Seven agents
+### Seven Agents
 
-| ID | Access | Lane default |
-|----|--------|----------------|
+| Agent ID | SDK Access | Default Lane |
+|----------|-----------|--------------|
 | `llm` | `sdk.native.llm.execute()` | A (agentkit + WSS) |
 | `jsonApi` | `sdk.native.jsonApi.execute()` | A |
 | `webParse` | `sdk.native.webParse.execute()` | A |
@@ -53,25 +81,30 @@ Copy printed addresses into `sdk/.env`.
 | `factionMorale` | `world.agents.factionMorale.invoke()` | A |
 | `conflict` | `world.agents.conflict.invoke()` | A |
 
-Fixed **system prompts** live in `sdk/src/agents/prompts.ts`. User **style** (`epic`, `noir`, …) only affects the user prompt.
+Fixed **system prompts** live in `sdk/src/agents/prompts.ts`. User **style** (`epic`, `noir`, `cyberpunk`, …) only affects the user-facing prompt — the system prompt is hardcoded and tamper-proof.
 
-### Two execution lanes
+### Two Execution Lanes
 
-- **Lane A (`execution: 'sdk'`, default)** — `SomniaAgentKit` → `createAdvancedRequest` → `CallbackReceiver` WebSocket by `requestId`. Lowest gas, sub-second.
-- **Lane B (`execution: 'onchain'`)** — world contract `requestLlm` / `requestJsonApi` / `requestWebParse` / `chronicleFromAgent`. Watch `world.onAgentResult(requestId)` or `NativeAgentRequested`.
+**Lane A (`execution: 'sdk'`, default)**
+`SomniaAgentKit` → `createAdvancedRequest` → `CallbackReceiver` → WebSocket filter by `requestId`. Lowest gas, sub-second result delivery.
 
-`persistOnChain: true` writes state only (e.g. `recordChronicleEntry`, `applyClimateResult`) **without** a second LLM call.
+**Lane B (`execution: 'onchain'`)**
+World contract calls `requestLlm` / `requestJsonApi` / `requestWebParse` / `chronicleFromAgent`. Callbacks go to `ReverieWorldInstance.handleResponse()`. State updates on-chain without any human in the loop.
 
-### Agentkit
+> [!NOTE]
+> `persistOnChain: true` writes state (e.g. `recordChronicleEntry`, `applyClimateResult`) **without** triggering a second LLM call. The result from the first call is persisted.
 
-- `createAdvancedRequest` with consensus (`majority` / `threshold`), env defaults in `addresses.ts`
-- `DEFAULT_DEPOSIT_BUFFER` — excess STT refunded after execution
-- `WorldFrameSDK` is the SDK class used by builders.
-- `executeLLM`, `executeJsonApi`, and `executeWebParse` accept a `method` option.
-- Defaults are still simple: `inferString`, `fetchString`, and `ExtractString`.
-- Full agent-layer spec: [worldframe-sdk-spec.md](worldframe-sdk-spec.md)
+### SomniaAgentKit
 
-Example native method selection:
+- `createAdvancedRequest` with consensus mode (`majority` / `threshold`), env defaults in `addresses.ts`
+- `DEFAULT_DEPOSIT_BUFFER` — excess STT is automatically refunded after execution
+- `WorldFrameSDK` is the primary class used by builders
+- `executeLLM`, `executeJsonApi`, and `executeWebParse` all accept a `method` option for precise output types
+- Defaults: `inferString`, `fetchString`, `ExtractString`
+
+Full agent-layer specification: [worldframe-sdk-spec.md](worldframe-sdk-spec.md)
+
+#### Example: Method Selection
 
 ```typescript
 const year = await kit.executeWebParse({
@@ -88,7 +121,7 @@ const year = await kit.executeWebParse({
 });
 ```
 
-### Hybrid triggers
+### Hybrid Triggers
 
 ```typescript
 await world.addTrigger({
@@ -100,12 +133,12 @@ await world.addTrigger({
 });
 ```
 
-- **`offchain`** — `TriggerManager` + `world.onEvent`
-- **`onchain`** — `world.subscribeToEvent` tx; autonomous chaining via `_onEvent` (stub; full chaining Phase 2)
+| Mode | Mechanism |
+|------|-----------|
+| `offchain` | `TriggerManager` + `world.onEvent` — off-chain polling and WebSocket watching |
+| `onchain` | `world.subscribeToEvent` transaction — native Somnia Reactivity subscription |
 
-Optional: `subscribeReactivityEvents()` from `sdk/src/reactivity/ReactivityClient.ts` (`@somnia-chain/reactivity@0.1.10` — `0.2.0` npm tarball ships without `dist`; use `viem@2.37.8` for peer alignment).
-
-Build:
+### Build
 
 ```bash
 cd sdk
@@ -114,16 +147,21 @@ npm install
 npm run build
 ```
 
-Verified:
+### Verified Results
 
-- `npm run check:selectors` passed.
-- `npm run check:abi` passed.
-- `npm run compile` passed.
-- Core contract bytecode is below Somnia's 24 KB limit: `ReverieWorldInstance` is 14,256 bytes.
-- Native E2E tests passed: `test:llm`, `test:json-api`, `test:web-parse`, and `test:native-methods`.
-- Current live testnet world: `0x747F6b3afb75eA2D1e4c74540f11E8518Fc80162`.
+| Check | Status |
+|-------|--------|
+| `npm run check:selectors` | ✅ Passed |
+| `npm run check:abi` | ✅ Passed |
+| `npm run compile` | ✅ Passed |
+| `ReverieWorldInstance` bytecode | ✅ 14,256 bytes (under Somnia's 24 KB limit) |
+| `test:llm`, `test:json-api`, `test:web-parse`, `test:native-methods` | ✅ All passed |
 
-## 3. Smoke test
+Live testnet world: `0x747F6b3afb75eA2D1e4c74540f11E8518Fc80162`
+
+---
+
+## 3. End-to-End Smoke Test
 
 ```typescript
 import { WorldFrameSDK } from '@worldframe/sdk';
@@ -134,11 +172,14 @@ const sdk = new WorldFrameSDK({
   network: 'testnet',
 });
 
+// Native agent call — consensus-verified
 const llm = await sdk.native.llm.execute({ prompt: 'What is 2+2?' });
 
+// Bind to a deployed world
 const world = sdk.useWorld('0xYourWorld');
 world.onEvent((e) => console.log(e));
 
+// REVERIE composite agents via SDK lane
 await world.agents.chronicle.invoke(
   { event: 'The gate fell', style: 'epic' },
   { execution: 'sdk', persistOnChain: true }
@@ -150,9 +191,17 @@ await world.agents.zoneClimate.invoke(
 );
 ```
 
-## Phase 2 (out of scope)
+---
 
-- Full REVERIE no-code frontend UI
-- Full `_onEvent` autonomous chains
-- Mainnet
-- Custom Somnia agents on the platform
+## Phase 2: Delivered
+
+Phase 2 — the REVERIE no-code frontend platform — has been fully built and deployed. It provides:
+
+- **Visual world builder** — configure zones, factions, triggers, agent chains, data sources, and output mappings without touching ABIs or Solidity
+- **One-click deployment** — compile the world manifest and deploy to Somnia testnet via browser wallet
+- **Live Proof of Thought receipts** — inspect every agent execution's cryptographic proof
+- **Official template marketplace** — start from production-ready world templates
+- **Subdomain-based product UX** — `apps.`, `agents.`, `docs.`, `marketplace.`, `tools.`, `mcp.`
+- **Full lifecycle controls** — deploy, fund, arm, pause, stop, reconcile, and monitor in-browser
+
+→ See [reverie-frontend/README.md](reverie-frontend/README.md) for full frontend documentation.

@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { getBaseSiteUrl } from '@/lib/server/auth-cookies';
 import { createAdminSupabaseClient } from '@/lib/supabase-server';
 import { hasSupabaseAdminEnv } from '@/lib/server/supabase';
+import { worldSlugFromHost } from '@/lib/shared/base-url';
 
 async function getHeaderSession() {
   const session = await getServerSession();
@@ -36,10 +37,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const headerStore = await headers();
   const pathname = headerStore.get('x-reverie-pathname') ?? '';
   const host = headerStore.get('host');
-  const hostname = host?.split(':')[0] ?? '';
-  const hostParts = hostname.split('.');
-  const appIndex = hostParts.indexOf('app');
-  const worldSlug = appIndex > 0 ? hostParts.slice(0, appIndex).join('.') : null;
+  const worldSlug = worldSlugFromHost(host);
   const isPublicDocs = pathname === '/docs' || pathname.startsWith('/docs/');
   const session = await getHeaderSession();
 

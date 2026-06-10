@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { REVERIE_SESSION_COOKIE } from '@/lib/server/auth-cookies';
-import { parseBaseUrl } from '@/lib/shared/base-url';
+import { effectivePathnameFromHost, isAppSubdomainHost, parseBaseUrl, usesSubdomainRouting } from '@/lib/shared/base-url';
 
 const PROTECTED_ROUTES = ['/dashboard', '/agents', '/apps', '/templates', '/tools'];
 
@@ -12,7 +12,8 @@ export function proxy(request: NextRequest) {
   const canonicalRedirect = resolveCanonicalRedirect(request);
   if (canonicalRedirect) return canonicalRedirect;
 
-  const rewrittenPath = resolveSubdomainPath(host, pathname);
+  const base = publicBaseUrl();
+  const rewrittenPath = !base || usesSubdomainRouting(base) ? resolveSubdomainPath(host, pathname) : null;
   const effectivePathname = rewrittenPath ?? pathname;
   const isPublicToolRun = effectivePathname.startsWith('/tools/run/');
   const isProtected = !isPublicToolRun && PROTECTED_ROUTES.some((route) => effectivePathname.startsWith(route));
@@ -39,52 +40,14 @@ export function proxy(request: NextRequest) {
 
 function resolveSubdomainPath(host: string, pathname: string): string | null {
   if (isPublicSystemPath(pathname)) return null;
-  const parts = host.split('.');
-  const subdomain = parts[0];
-  const appIndex = parts.indexOf('app');
-
-  if (appIndex > 0) {
-    const segments = pathname.split('/').filter(Boolean);
-    if (segments.length === 0) return '/apps';
-    return `/apps/${segments.join('/')}`;
+  const base = publicBaseUrl();
+  if (!base || !usesSubdomainRouting(base)) return null;
+  const effectivePath = effectivePathnameFromHost(host, pathname, base);
+  if (effectivePath === pathname) return null;
+  if (effectivePath === '/tools/run' || effectivePath.startsWith('/tools/run/')) {
+    return `/api${effectivePath}`;
   }
-
-  if (subdomain === 'agent') {
-    return resolvePrefixedPath('/agents', pathname);
-  }
-
-  if (subdomain === 'agents') {
-    return resolvePrefixedPath('/agents', pathname);
-  }
-
-  if (subdomain === 'app') {
-    return resolvePrefixedPath('/apps', pathname);
-  }
-
-  if (subdomain === 'apps') {
-    return resolvePrefixedPath('/apps', pathname);
-  }
-
-  if (subdomain === 'docs') {
-    return resolvePrefixedPath('/docs', pathname);
-  }
-
-  if (subdomain === 'marketplace') {
-    return resolvePrefixedPath('/templates', pathname);
-  }
-
-  if (subdomain === 'tools') {
-    if (pathname === '/run' || pathname.startsWith('/run/')) {
-      return `/api/tools${pathname}`;
-    }
-    return resolvePrefixedPath('/tools', pathname);
-  }
-
-  if (subdomain === 'mcp') {
-    return resolvePrefixedPath('/mcp', pathname);
-  }
-
-  return null;
+  return effectivePath;
 }
 
 function isPublicSystemPath(pathname: string) {
@@ -95,12 +58,6 @@ function isPublicSystemPath(pathname: string) {
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
     pathname === '/logo.png';
-}
-
-function resolvePrefixedPath(prefix: string, pathname: string): string | null {
-  if (pathname === '/') return prefix;
-  if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return null;
-  return `${prefix}${pathname}`;
 }
 
 function resolveCanonicalRedirect(request: NextRequest): NextResponse | null {
@@ -121,6 +78,7 @@ function resolveCanonicalRedirect(request: NextRequest): NextResponse | null {
     return NextResponse.redirect(dashboardUrl.toString());
   }
   if (pathname.startsWith('/api/') || pathname.startsWith('/auth/') || pathname === '/login') return null;
+  if (!usesSubdomainRouting(base)) return null;
 
   if (pathname === '/apps' || pathname === '/apps/') return redirectTo(base, 'apps', '/', search);
   if (pathname === '/apps/create') return redirectTo(base, 'apps', '/create', search);
@@ -191,6 +149,7 @@ function redirectTo(base: URL, subdomain: string, path: string, search = '') {
 }
 
 function isCanonicalHost(host: string, baseHost: string) {
+  const base = publicBaseUrl();
   return host === baseHost ||
     host === `docs.${baseHost}` ||
     host === `agents.${baseHost}` ||
@@ -198,7 +157,7 @@ function isCanonicalHost(host: string, baseHost: string) {
     host === `marketplace.${baseHost}` ||
     host === `tools.${baseHost}` ||
     host === `mcp.${baseHost}` ||
-    host.endsWith(`.app.${baseHost}`);
+    Boolean(base && isAppSubdomainHost(host, base));
 }
 
 function slugify(value: string) {
