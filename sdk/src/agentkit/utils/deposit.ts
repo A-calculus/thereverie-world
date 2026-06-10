@@ -1,6 +1,5 @@
-import { createPublicClient, http } from "viem";
-import { somniaTestnet } from "../../constants.js";
 import { AGENTS_PLATFORM_ABI } from "../contracts/abis.js";
+import type { PublicClient } from "viem";
 import {
   getPlatformAddress,
   getDefaultSubcommitteeSize,
@@ -9,21 +8,21 @@ import {
   PRACTICAL_DEPOSITS,
   type AgentPlatformType,
 } from "../contracts/addresses.js";
+import { createSdkPublicClient } from "../../transports.js";
 
 export async function calculateDeposit(
   agentType: AgentPlatformType,
   userBuffer = 0n,
   rpcUrl?: string,
-  subcommitteeSize?: bigint
+  wsUrl?: string,
+  subcommitteeSize?: bigint,
+  publicClient?: PublicClient
 ): Promise<bigint> {
   const size = subcommitteeSize ?? getDefaultSubcommitteeSize();
   const defaultBuffer = getDefaultDepositBuffer();
 
   try {
-    const client = createPublicClient({
-      chain: somniaTestnet,
-      transport: http(rpcUrl ?? "https://api.infra.testnet.somnia.network"),
-    });
+    const client = publicClient ?? createSdkPublicClient({ rpcUrl, wsUrl });
 
     const platformAddress = getPlatformAddress(agentType);
 

@@ -216,7 +216,11 @@ export async function pollAgentResult(
 
       if (finalizedStatus !== null) {
         if (finalizedStatus !== SUCCESS_STATUS) {
-          throw new SomniaAgentFailedError(context.requestId, finalizedStatus);
+          throw new SomniaAgentFailedError(context.requestId, finalizedStatus, {
+            txHash: context.txHash,
+            receiptUrl: context.receiptUrl,
+            callbackAddress: context.callbackAddress,
+          });
         }
         throw new SomniaCallbackDeliveryError(context.requestId, finalizedStatus, {
           txHash: context.txHash,

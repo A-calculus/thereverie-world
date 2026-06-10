@@ -10,6 +10,12 @@ import "../interfaces/ISomniaAgents.sol";
  * @dev Unified router for Somnia's 3 native agents (LLM, JSON API, Web Parse).
  */
 library SomniaNativeAgentsLib {
+    uint256 private constant FALLBACK_LLM_RUNNER_PRICE = 70_000_000_000_000_000;
+    uint256 private constant FALLBACK_JSON_RUNNER_PRICE = 30_000_000_000_000_000;
+    uint256 private constant FALLBACK_WEB_PARSE_RUNNER_PRICE = 100_000_000_000_000_000;
+    uint256 private constant FALLBACK_FIXED_BUFFER = 50_000_000_000_000_000;
+    uint256 private constant FALLBACK_BUFFER_BPS = 10_000;
+
     enum NativeAgentType {
         LLM,
         JsonApi,
@@ -68,11 +74,14 @@ library SomniaNativeAgentsLib {
             agentId = config.webParseAgentId;
         }
 
-        uint256 deposit = platform.getAdvancedRequestDeposit(size);
-        if (address(this).balance < deposit && msg.value < deposit) {
+        (, , , , uint256 requiredBudget) = calculateRequestBudget(config, agent, size);
+        uint256 valToSend = msg.value > 0 ? msg.value : requiredBudget;
+        if (valToSend < requiredBudget) {
             revert InsufficientBalance();
         }
-        uint256 valToSend = msg.value > 0 ? msg.value : deposit;
+        if (msg.value == 0 && address(this).balance < valToSend) {
+            revert InsufficientBalance();
+        }
 
         requestId = platform.createAdvancedRequest{value: valToSend}(
             agentId,
@@ -86,5 +95,41 @@ library SomniaNativeAgentsLib {
         );
 
         emit NativeAgentRequested(requestId, agent, triggerId);
+    }
+
+    function calculateRequestBudget(
+        WorldTypes.WorldConfig storage config,
+        NativeAgentType agent,
+        uint256 subcommitteeSize
+    )
+        internal
+        view
+        returns (
+            uint256 platformDeposit,
+            uint256 runnerFee,
+            uint256 fixedBuffer,
+            uint256 percentBuffer,
+            uint256 totalBudget
+        )
+    {
+        uint256 size = subcommitteeSize == 0 ? config.subcommitteeSize : subcommitteeSize;
+        IAgentRequester platform;
+
+        if (agent == NativeAgentType.LLM) {
+            platform = IAgentRequester(config.llmPlatform);
+            runnerFee = FALLBACK_LLM_RUNNER_PRICE * size;
+        } else if (agent == NativeAgentType.JsonApi) {
+            platform = IAgentRequester(config.jsonPlatform);
+            runnerFee = FALLBACK_JSON_RUNNER_PRICE * size;
+        } else {
+            platform = IAgentRequester(config.jsonPlatform);
+            runnerFee = FALLBACK_WEB_PARSE_RUNNER_PRICE * size;
+        }
+
+        platformDeposit = platform.getAdvancedRequestDeposit(size);
+        fixedBuffer = FALLBACK_FIXED_BUFFER;
+        uint256 base = platformDeposit + runnerFee;
+        percentBuffer = (base * FALLBACK_BUFFER_BPS) / 10_000;
+        totalBudget = base + fixedBuffer + percentBuffer;
     }
 }

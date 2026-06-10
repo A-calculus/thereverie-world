@@ -1,6 +1,7 @@
 /**
  * Shared TypeScript types for the @worldframe/sdk
  */
+import type { Account, Chain, Transport, WalletClient } from "viem";
 
 // ─── Signer / Provider Abstraction ───────────────────────────────────────────
 
@@ -11,12 +12,26 @@ export interface PrivateKeyConfig {
   mode: "privateKey";
   privateKey: `0x${string}`;
   network: NetworkId;
+  rpcUrl?: string;
+  wsUrl?: string;
+  callbackReceiverAddress?: `0x${string}`;
+  callbackReceiverLlm?: `0x${string}`;
+  callbackReceiverPrimary?: `0x${string}`;
+  timeoutMs?: number;
 }
 
 /** Config for browser wallet mode (MetaMask / injected provider) */
 export interface BrowserWalletConfig {
   mode: "browser";
   network: NetworkId;
+  rpcUrl?: string;
+  wsUrl?: string;
+  callbackReceiverAddress?: `0x${string}`;
+  callbackReceiverLlm?: `0x${string}`;
+  callbackReceiverPrimary?: `0x${string}`;
+  timeoutMs?: number;
+  walletClient?: WalletClient<Transport, Chain, Account>;
+  account?: Account | `0x${string}`;
 }
 
 export type SDKConfig = PrivateKeyConfig | BrowserWalletConfig;
@@ -98,7 +113,15 @@ export type WorldStyle =
   | "noir"
   | "mythological"
   | "cyberpunk"
-  | "dark_fantasy";
+  | "dark_fantasy"
+  | "financial"
+  | "governance"
+  | "social"
+  | "scientific"
+  | "legal"
+  | "supply_chain"
+  | "predictive"
+  | "minimal";
 
 export interface WeatherFeed {
   type: "weather";

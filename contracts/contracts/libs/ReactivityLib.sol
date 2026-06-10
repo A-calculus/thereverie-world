@@ -18,9 +18,19 @@ library ReactivityLib {
         bytes32 eventSig,
         uint64 gasLimit
     ) internal returns (uint256 subscriptionId) {
+        bytes32[4] memory topics = [eventSig, bytes32(0), bytes32(0), bytes32(0)];
+        subscriptionId = subscribeWithTopics(handler, emitter, topics, gasLimit);
+    }
+
+    function subscribeWithTopics(
+        address handler,
+        address emitter,
+        bytes32[4] memory eventTopics,
+        uint64 gasLimit
+    ) internal returns (uint256 subscriptionId) {
         ISomniaReactivityPrecompile.SubscriptionData memory subData =
             ISomniaReactivityPrecompile.SubscriptionData({
-                eventTopics: [eventSig, bytes32(0), bytes32(0), bytes32(0)],
+                eventTopics: eventTopics,
                 origin: address(0),
                 caller: address(0),
                 emitter: emitter,

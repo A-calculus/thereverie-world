@@ -19,9 +19,9 @@ library WorldStateLib {
     function setZone(
         Storage storage self,
         bytes32 zoneId,
-        string calldata name,
+        string memory name,
         uint256 dangerLevel,
-        string calldata faction
+        string memory faction
     ) internal {
         WorldTypes.Zone storage z = self.zones[zoneId];
         z.name = name;
@@ -35,7 +35,7 @@ library WorldStateLib {
     function applyClimateResult(
         Storage storage self,
         bytes32 zoneId,
-        string calldata climateState
+        string memory climateState
     ) internal {
         WorldTypes.Zone storage z = self.zones[zoneId];
         require(bytes(z.name).length > 0, "Unknown zone");
@@ -54,7 +54,7 @@ library WorldStateLib {
     function applyConflictOutcome(
         Storage storage self,
         bytes32 zoneId,
-        string calldata outcome
+        string memory outcome
     ) internal {
         WorldTypes.Zone storage z = self.zones[zoneId];
         require(bytes(z.name).length > 0, "Unknown zone");
@@ -78,9 +78,9 @@ library WorldStateLib {
 
     function updateFactionMorale(
         Storage storage self,
-        string calldata factionId,
+        string memory factionId,
         int256 moraleDelta,
-        string calldata narrative
+        string memory narrative
     ) internal {
         self.factionMorale[factionId] = WorldTypes.FactionMorale({
             moraleDelta: moraleDelta,
@@ -101,8 +101,8 @@ library WorldStateLib {
     function applyAgentResult(
         Storage storage self,
         bytes32 zoneId,
-        string calldata outcome,
-        string calldata eventType
+        string memory outcome,
+        string memory eventType
     ) internal {
         self.eventHistory.push(
             WorldTypes.WorldEvent(block.timestamp, eventType, outcome, 0)

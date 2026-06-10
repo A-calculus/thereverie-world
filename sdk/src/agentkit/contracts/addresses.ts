@@ -165,7 +165,7 @@ export function getRegistryAddress(): `0x${string}` | undefined {
 }
 
 export const RECEIPTS_BASE_URL =
-  "https://receipts.testnet.agents.somnia.host";
+  "https://agents.testnet.somnia.network/receipts";
 
 export function getReceiptUrl(requestId: bigint): string {
   return `${RECEIPTS_BASE_URL}/${requestId.toString()}`;

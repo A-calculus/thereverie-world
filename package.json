@@ -1,0 +1,8 @@
+{
+  "name": "reverie-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:local": "node scripts/local-dev.mjs"
+  }
+}

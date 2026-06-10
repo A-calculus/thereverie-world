@@ -7,7 +7,6 @@ import {
   getDefaultSubcommitteeSize,
   getDefaultConsensusType,
   getDefaultThreshold,
-  getDefaultDepositBuffer,
   getReceiptUrl,
   type AgentPlatformType,
   type ConsensusTypeName,
@@ -26,6 +25,7 @@ export interface AdvancedRequestParams {
   subcommitteeSize?: bigint;
   timeoutMs: number;
   rpcUrl?: string;
+  wsUrl?: string;
 }
 
 export interface AdvancedRequestResult {
@@ -48,7 +48,7 @@ function resolveConsensus(opts: AgentRequestOptions, size: bigint) {
 export async function submitAdvancedRequest(
   publicClient: PublicClient,
   walletClient: WalletClient<Transport, Chain, Account>,
-  account: Account,
+  account: Account | `0x${string}`,
   params: AdvancedRequestParams
 ): Promise<AdvancedRequestResult> {
   const size = params.subcommitteeSize ?? getDefaultSubcommitteeSize();
@@ -56,7 +56,9 @@ export async function submitAdvancedRequest(
     params.agentType,
     params.depositBuffer ?? 0n,
     params.rpcUrl,
-    size
+    params.wsUrl,
+    size,
+    publicClient
   );
 
   const platform = getPlatformAddress(params.agentType);

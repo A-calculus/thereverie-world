@@ -1,5 +1,4 @@
 import {
-  createPublicClient,
   createWalletClient,
   http,
   custom,
@@ -34,6 +33,8 @@ import { WebSocketManager } from "./utils/websocket.js";
 import { submitAdvancedRequest, type AdvancedRequestResult } from "./utils/request.js";
 import { pollAgentResult, type AgentWaitResult } from "./utils/result.js";
 import { decodeStringResult } from "./utils/decode.js";
+import { createSdkPublicClient, resolveRpcUrl, resolveWsUrl } from "../transports.js";
+import { logCallbackWssError } from "../logger.js";
 import {
   SomniaValidationError,
   SomniaWalletError,
@@ -147,11 +148,9 @@ export class SomniaAgentKit {
     this.defaultSubcommitteeSize =
       this.config.subcommitteeSize ?? getDefaultSubcommitteeSize();
 
-    const rpcUrl =
-      this.config.rpcUrl ?? "https://api.infra.testnet.somnia.network";
-    this.publicClient = createPublicClient({
-      chain: somniaTestnet,
-      transport: http(rpcUrl),
+    this.publicClient = createSdkPublicClient({
+      rpcUrl: this.config.rpcUrl,
+      wsUrl: this.config.wsUrl,
     });
   }
 
@@ -562,6 +561,7 @@ export class SomniaAgentKit {
       subcommitteeSize: opts.subcommitteeSize ?? this.defaultSubcommitteeSize,
       timeoutMs: opts.timeoutMs ?? this.config.timeoutMs,
       rpcUrl: this.config.rpcUrl,
+      wsUrl: this.config.wsUrl,
     };
   }
 
@@ -588,8 +588,7 @@ export class SomniaAgentKit {
   private getWsManager(callbackAddress: string): WebSocketManager {
     let ws = this.wsManagers.get(callbackAddress);
     if (!ws) {
-      const wsUrl =
-        this.config.wsUrl ?? "wss://api.infra.testnet.somnia.network/ws";
+      const wsUrl = resolveWsUrl(this.config.wsUrl);
       ws = new WebSocketManager(wsUrl, callbackAddress);
       this.wsManagers.set(callbackAddress, ws);
     }
@@ -616,6 +615,14 @@ export class SomniaAgentKit {
       .catch((err) => {
         const code = (err as { code?: string }).code;
         if (code === "TIMEOUT" || code === "WEBSOCKET_ERROR") {
+          if ((err as { message?: string }).message !== "SDK destroyed") {
+            logCallbackWssError({
+              method: "AgentResult",
+              transportKey: "callback-wss",
+              transportName: "CallbackReceiver WSS",
+              error: err,
+            });
+          }
           return new Promise<never>(() => undefined);
         }
         throw err;
@@ -677,8 +684,33 @@ export class SomniaAgentKit {
 
   private async getWalletClient(
     opts: AgentRequestOptions
-  ): Promise<{ walletClient: WalletClient<Transport, Chain, Account>; account: Account }> {
+  ): Promise<{ walletClient: WalletClient<Transport, Chain, Account>; account: Account | `0x${string}` }> {
     const depositBuffer = (opts.depositBuffer ?? 0n) + 1n; // balance check uses min 1 wei placeholder
+
+    if (this.config.walletClient) {
+      const walletClient = this.config.walletClient as WalletClient<Transport, Chain, Account>;
+      const configuredAccount = this.config.account as Account | `0x${string}` | undefined;
+      const account = configuredAccount ?? walletClient.account;
+      if (account) {
+        const address = typeof account === "string" ? account : account.address;
+        const balance = await this.publicClient.getBalance({ address });
+        if (balance < depositBuffer) {
+          throw new SomniaInsufficientFundsError(depositBuffer, balance);
+        }
+        return {
+          walletClient,
+          account: typeof account === "string" || "type" in account ? account : address,
+        };
+      }
+
+      const [address] = await walletClient.getAddresses();
+      if (!address) throw new SomniaWalletError("No accounts from wallet client");
+      const balance = await this.publicClient.getBalance({ address });
+      if (balance < depositBuffer) {
+        throw new SomniaInsufficientFundsError(depositBuffer, balance);
+      }
+      return { walletClient, account: address };
+    }
 
     if (this.config.privateKey) {
       const account = privateKeyToAccount(this.config.privateKey as `0x${string}`);
@@ -691,9 +723,7 @@ export class SomniaAgentKit {
       const walletClient = createWalletClient({
         account,
         chain: somniaTestnet,
-        transport: http(
-          this.config.rpcUrl ?? "https://api.infra.testnet.somnia.network"
-        ),
+        transport: http(resolveRpcUrl(this.config.rpcUrl)),
       });
       return { walletClient, account };
     }
@@ -711,7 +741,7 @@ export class SomniaAgentKit {
     })) as string[];
     if (!accounts[0]) throw new SomniaWalletError("No accounts from wallet");
 
-    const account = { address: accounts[0] as `0x${string}` } as Account;
+    const account = accounts[0] as `0x${string}`;
     const walletClient = createWalletClient({
       account,
       chain: somniaTestnet,

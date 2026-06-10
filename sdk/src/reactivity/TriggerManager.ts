@@ -1,5 +1,5 @@
 import { keccak256, toBytes } from "viem";
-import type { PublicClient, WalletClient, Account, Transport, Chain } from "viem";
+import type { WalletClient, Account, Transport, Chain } from "viem";
 import type { SomniaAgentKit } from "../agentkit/SomniaAgentKit.js";
 import type { WorldInstance } from "../WorldInstance.js";
 import type { TriggerConfig } from "../types.js";
@@ -24,7 +24,6 @@ export class TriggerManager {
 
   constructor(
     private world: WorldInstance,
-    private publicClient: PublicClient,
     private walletClient: WalletClient<Transport, Chain, Account>,
     private agentKit: SomniaAgentKit
   ) {}
@@ -35,7 +34,7 @@ export class TriggerManager {
 
     const mode = config.mode ?? "offchain";
     if (mode === "onchain") {
-      void this.registerOnChain(entry);
+      void this.registerOnChain();
     } else {
       this.registerOffChain(entry);
     }
@@ -69,7 +68,7 @@ export class TriggerManager {
     });
   }
 
-  private async registerOnChain(entry: ActiveTrigger): Promise<void> {
+  private async registerOnChain(): Promise<void> {
     const eventSig = keccak256(
       toBytes("AgentDecisionReceived(uint256,string)")
     );

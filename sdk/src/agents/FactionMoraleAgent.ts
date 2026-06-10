@@ -19,6 +19,10 @@ function buildCoinGeckoUrl(pair: string): string {
 export interface FactionMoraleInvokeParams {
   factionId: string;
   pair: string;
+  currentMorale?: string | number;
+  recentActions?: string;
+  economyState?: string;
+  objective?: string;
   style?: WorldStyle;
 }
 
@@ -56,7 +60,13 @@ export class FactionMoraleAgent {
         String(price.value),
         String(change.value),
         params.factionId,
-        style
+        style,
+        {
+          currentMorale: params.currentMorale,
+          recentActions: params.recentActions,
+          economyState: params.economyState,
+          objective: params.objective,
+        }
       ),
       systemPrompt: FIXED_PROMPTS.factionMorale,
       allowedValues: [],

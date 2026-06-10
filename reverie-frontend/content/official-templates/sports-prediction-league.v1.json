@@ -1,0 +1,1122 @@
+{
+  "uiSlug": "sports-prediction-league",
+  "displayName": "Sports Prediction League",
+  "description": "A lightweight prediction world that locks pre-match AI predictions, settles prepared match results, updates team morale, and records outcomes with receipts.",
+  "version": "sports-prediction-league-v1",
+  "engine": "genericEventWorld",
+  "publicTypes": {
+    "PredictionState": [
+      "PENDING",
+      "LOCKED",
+      "SETTLED",
+      "DISPUTED"
+    ],
+    "inputs": [
+      "leagueId",
+      "matchId",
+      "userPrediction",
+      "disputeReason"
+    ]
+  },
+  "inputSchema": [
+    {
+      "id": "leagueId",
+      "label": "League",
+      "type": "select",
+      "required": true,
+      "defaultValue": "premier-league",
+      "options": [
+        {
+          "label": "Premier League",
+          "value": "premier-league"
+        },
+        {
+          "label": "NBA",
+          "value": "nba"
+        },
+        {
+          "label": "NFL",
+          "value": "nfl"
+        },
+        {
+          "label": "International Competitions",
+          "value": "international"
+        }
+      ]
+    },
+    {
+      "id": "matchId",
+      "label": "Match",
+      "type": "select",
+      "required": true,
+      "defaultValue": "arsenal-chelsea-demo",
+      "options": [
+        {
+          "label": "Arsenal vs Chelsea",
+          "value": "arsenal-chelsea-demo"
+        },
+        {
+          "label": "Lakers vs Celtics",
+          "value": "lakers-celtics-demo"
+        },
+        {
+          "label": "Chiefs vs Ravens",
+          "value": "chiefs-ravens-demo"
+        }
+      ]
+    },
+    {
+      "id": "userPrediction",
+      "label": "User prediction",
+      "type": "text",
+      "required": true,
+      "defaultValue": "Arsenal win by one goal after a close second half."
+    },
+    {
+      "id": "disputeReason",
+      "label": "Dispute reason",
+      "type": "text",
+      "required": false,
+      "defaultValue": "Review whether the final result was settled against the locked prediction."
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "demoMatchFeed",
+      "name": "Prepared Match Feed",
+      "type": "json",
+      "url": "/api/demo/sports-prediction/matches?matchId={{runtime.inputs.matchId}}",
+      "method": "GET"
+    }
+  ],
+  "agentChain": [
+    {
+      "id": "match-data-reader",
+      "name": "Match Data Reader",
+      "agentType": "native_json_api",
+      "purpose": "Read prepared match stats, kickoff state, and final result data.",
+      "inputTemplate": "Inspect match data for {{runtime.inputs.matchId}} from {{source.value}}.",
+      "persistResult": false
+    },
+    {
+      "id": "prediction-locker",
+      "name": "Prediction Lock Agent",
+      "agentType": "native_llm",
+      "purpose": "Create or evaluate a timestamped prediction before settlement.",
+      "inputTemplate": "Lock a prediction for {{runtime.inputs.matchId}} using user prediction {{runtime.inputs.userPrediction}} and previous output {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "settlement-analyst",
+      "name": "Settlement Analyst",
+      "agentType": "native_llm",
+      "purpose": "Compare locked prediction against final score and classify accuracy.",
+      "inputTemplate": "Settle the prediction using match data and previous output {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "team-morale",
+      "name": "Team Morale Agent",
+      "agentType": "native_llm",
+      "purpose": "Update team and prediction faction morale after result settlement.",
+      "inputTemplate": "Update morale and reputation from {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "sports-chronicle",
+      "name": "Sports Chronicle Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Write pre-match prediction and post-match settlement entries.",
+      "inputTemplate": "Write a concise prediction league Chronicle entry for {{previous.output}}.",
+      "persistResult": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "premier-league",
+      "name": "Premier League Zone",
+      "description": "Football clubs and table-pressure dynamics.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "home-team",
+        "climate": "CALM",
+        "predictionState": "PENDING"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "nba",
+      "name": "NBA Zone",
+      "description": "Basketball matchup and playoff race dynamics.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "away-team",
+        "climate": "CALM",
+        "predictionState": "PENDING"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "nfl",
+      "name": "NFL Zone",
+      "description": "Weekly matchup dynamics.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "prediction-pool",
+        "climate": "CALM",
+        "predictionState": "PENDING"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "international",
+      "name": "International Competitions Zone",
+      "description": "Tournament matches and temporary factions.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "dispute-court",
+        "climate": "CALM",
+        "predictionState": "PENDING"
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "factions": [
+    {
+      "id": "home-team",
+      "name": "Home Team Faction",
+      "description": "Home-team morale and prediction accuracy.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Home Team Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "away-team",
+      "name": "Away Team Faction",
+      "description": "Away-team morale and prediction accuracy.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Away Team Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "prediction-pool",
+      "name": "Prediction Pool Faction",
+      "description": "Community prediction confidence and reputation.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Prediction Pool Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "dispute-court",
+      "name": "Dispute Court Faction",
+      "description": "Reviews disputed prediction settlements.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Dispute Court Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "triggers": [
+    {
+      "id": "start-sports-runtime",
+      "name": "Start Prediction Runtime",
+      "type": "data_condition",
+      "sourceId": "demoMatchFeed",
+      "condition": {
+        "isStartTrigger": true
+      },
+      "sourceConfig": {
+        "kind": "builder_input",
+        "sourceId": "matchId",
+        "path": ""
+      },
+      "typeConfig": {
+        "conditionEnabled": false,
+        "operator": "exists",
+        "compareValue": ""
+      },
+      "inputParser": "{\n  \"leagueId\": \"{{runtime.inputs.leagueId}}\",\n  \"matchId\": \"{{runtime.inputs.matchId}}\",\n  \"prediction\": \"{{runtime.inputs.userPrediction}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "League event log",
+          "path": "eventLog",
+          "valueTemplate": "Start Prediction Runtime completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "premier-league",
+          "path": "latestDecision",
+          "valueTemplate": "Start Prediction Runtime updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "prediction-pool",
+          "path": "latestDecision",
+          "valueTemplate": "Start Prediction Runtime updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "settlementSummary",
+          "valueTemplate": "Start Prediction Runtime completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "match-data-reader",
+        "prediction-locker",
+        "sports-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "manual-match-settlement",
+      "name": "Manual Match Settlement",
+      "type": "manual_action",
+      "sourceId": "demoMatchFeed",
+      "sourceConfig": {
+        "kind": "manual_payload",
+        "path": ""
+      },
+      "typeConfig": {
+        "buttonLabel": "Settle Match",
+        "description": "Settle the prepared match result against the locked prediction.",
+        "payloadTemplate": "{\n  \"matchId\": \"{{runtime.inputs.matchId}}\",\n  \"prediction\": \"{{runtime.inputs.userPrediction}}\"\n}"
+      },
+      "inputParser": "{\n  \"matchId\": \"{{runtime.inputs.matchId}}\",\n  \"payload\": \"{{trigger.payload}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "League event log",
+          "path": "eventLog",
+          "valueTemplate": "Manual Match Settlement completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "nba",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Match Settlement updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "home-team",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Match Settlement updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "settlementSummary",
+          "valueTemplate": "Manual Match Settlement completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "match-data-reader",
+        "settlement-analyst",
+        "team-morale",
+        "sports-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "manual-dispute-review",
+      "name": "Manual Dispute Review",
+      "type": "manual_action",
+      "sourceId": "demoMatchFeed",
+      "sourceConfig": {
+        "kind": "manual_payload",
+        "path": ""
+      },
+      "typeConfig": {
+        "buttonLabel": "Review Dispute",
+        "description": "Review a disputed settlement with the prepared match result.",
+        "payloadTemplate": "{\n  \"matchId\": \"{{runtime.inputs.matchId}}\",\n  \"reason\": \"{{runtime.inputs.disputeReason}}\"\n}"
+      },
+      "inputParser": "{\n  \"reason\": \"{{runtime.inputs.disputeReason}}\",\n  \"payload\": \"{{trigger.payload}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "League event log",
+          "path": "eventLog",
+          "valueTemplate": "Manual Dispute Review completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "nfl",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Dispute Review updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "dispute-court",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Dispute Review updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "settlementSummary",
+          "valueTemplate": "Manual Dispute Review completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "settlement-analyst",
+        "sports-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "scheduled-match-feed-check",
+      "name": "Scheduled Match Feed Check",
+      "type": "scheduled",
+      "sourceId": "demoMatchFeed",
+      "sourceConfig": {
+        "kind": "data_source",
+        "sourceId": "demoMatchFeed",
+        "path": "body.match"
+      },
+      "typeConfig": {
+        "cronExpression": "*/20 * * * *",
+        "timezone": "UTC"
+      },
+      "inputParser": "{\n  \"matchId\": \"{{runtime.inputs.matchId}}\",\n  \"match\": \"{{source.value}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "League event log",
+          "path": "eventLog",
+          "valueTemplate": "Scheduled Match Feed Check completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "international",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Match Feed Check updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "away-team",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Match Feed Check updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "settlementSummary",
+          "valueTemplate": "Scheduled Match Feed Check completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "match-data-reader",
+        "settlement-analyst",
+        "team-morale",
+        "sports-chronicle"
+      ],
+      "isActive": true
+    }
+  ],
+  "manualActions": [
+    {
+      "id": "settle-match",
+      "label": "Settle Match",
+      "description": "Settle the prepared match result.",
+      "triggerId": "manual-match-settlement",
+      "ownerOnly": true
+    },
+    {
+      "id": "review-dispute",
+      "label": "Review Dispute",
+      "description": "Review a disputed match settlement.",
+      "triggerId": "manual-dispute-review",
+      "ownerOnly": true
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "input:leagueId",
+        "type": "input",
+        "label": "League",
+        "refId": "leagueId",
+        "position": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "input:matchId",
+        "type": "input",
+        "label": "Match",
+        "refId": "matchId",
+        "position": {
+          "x": 0,
+          "y": 90
+        }
+      },
+      {
+        "id": "input:userPrediction",
+        "type": "input",
+        "label": "User prediction",
+        "refId": "userPrediction",
+        "position": {
+          "x": 0,
+          "y": 180
+        }
+      },
+      {
+        "id": "input:disputeReason",
+        "type": "input",
+        "label": "Dispute reason",
+        "refId": "disputeReason",
+        "position": {
+          "x": 0,
+          "y": 270
+        }
+      },
+      {
+        "id": "data:demoMatchFeed",
+        "type": "dataSource",
+        "label": "Prepared Match Feed",
+        "refId": "demoMatchFeed",
+        "position": {
+          "x": 220,
+          "y": 0
+        }
+      },
+      {
+        "id": "trigger:start-sports-runtime",
+        "type": "trigger",
+        "label": "Start Prediction Runtime",
+        "refId": "start-sports-runtime",
+        "position": {
+          "x": 440,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:match-data-reader",
+        "type": "agent",
+        "label": "Match Data Reader",
+        "refId": "match-data-reader",
+        "position": {
+          "x": 660,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:prediction-locker",
+        "type": "agent",
+        "label": "Prediction Lock Agent",
+        "refId": "prediction-locker",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:sports-chronicle",
+        "type": "agent",
+        "label": "Sports Chronicle Agent",
+        "refId": "sports-chronicle",
+        "position": {
+          "x": 1020,
+          "y": 0
+        }
+      },
+      {
+        "id": "event:start-sports-runtime:0",
+        "type": "event",
+        "label": "League event log",
+        "refId": "League event log",
+        "position": {
+          "x": 1320,
+          "y": 0
+        }
+      },
+      {
+        "id": "zone:premier-league",
+        "type": "zone",
+        "label": "Premier League Zone",
+        "refId": "premier-league",
+        "position": {
+          "x": 1320,
+          "y": 42
+        }
+      },
+      {
+        "id": "faction:prediction-pool",
+        "type": "faction",
+        "label": "Prediction Pool Faction",
+        "refId": "prediction-pool",
+        "position": {
+          "x": 1320,
+          "y": 84
+        }
+      },
+      {
+        "id": "world_state:settlementSummary",
+        "type": "event",
+        "label": "settlementSummary",
+        "refId": "settlementSummary",
+        "position": {
+          "x": 1320,
+          "y": 126
+        }
+      },
+      {
+        "id": "trigger:manual-match-settlement",
+        "type": "trigger",
+        "label": "Manual Match Settlement",
+        "refId": "manual-match-settlement",
+        "position": {
+          "x": 440,
+          "y": 120
+        }
+      },
+      {
+        "id": "agent:settlement-analyst",
+        "type": "agent",
+        "label": "Settlement Analyst",
+        "refId": "settlement-analyst",
+        "position": {
+          "x": 840,
+          "y": 120
+        }
+      },
+      {
+        "id": "agent:team-morale",
+        "type": "agent",
+        "label": "Team Morale Agent",
+        "refId": "team-morale",
+        "position": {
+          "x": 1020,
+          "y": 120
+        }
+      },
+      {
+        "id": "event:manual-match-settlement:0",
+        "type": "event",
+        "label": "League event log",
+        "refId": "League event log",
+        "position": {
+          "x": 1320,
+          "y": 120
+        }
+      },
+      {
+        "id": "zone:nba",
+        "type": "zone",
+        "label": "NBA Zone",
+        "refId": "nba",
+        "position": {
+          "x": 1320,
+          "y": 162
+        }
+      },
+      {
+        "id": "faction:home-team",
+        "type": "faction",
+        "label": "Home Team Faction",
+        "refId": "home-team",
+        "position": {
+          "x": 1320,
+          "y": 204
+        }
+      },
+      {
+        "id": "trigger:manual-dispute-review",
+        "type": "trigger",
+        "label": "Manual Dispute Review",
+        "refId": "manual-dispute-review",
+        "position": {
+          "x": 440,
+          "y": 240
+        }
+      },
+      {
+        "id": "event:manual-dispute-review:0",
+        "type": "event",
+        "label": "League event log",
+        "refId": "League event log",
+        "position": {
+          "x": 1320,
+          "y": 240
+        }
+      },
+      {
+        "id": "zone:nfl",
+        "type": "zone",
+        "label": "NFL Zone",
+        "refId": "nfl",
+        "position": {
+          "x": 1320,
+          "y": 282
+        }
+      },
+      {
+        "id": "faction:dispute-court",
+        "type": "faction",
+        "label": "Dispute Court Faction",
+        "refId": "dispute-court",
+        "position": {
+          "x": 1320,
+          "y": 324
+        }
+      },
+      {
+        "id": "trigger:scheduled-match-feed-check",
+        "type": "trigger",
+        "label": "Scheduled Match Feed Check",
+        "refId": "scheduled-match-feed-check",
+        "position": {
+          "x": 440,
+          "y": 360
+        }
+      },
+      {
+        "id": "event:scheduled-match-feed-check:0",
+        "type": "event",
+        "label": "League event log",
+        "refId": "League event log",
+        "position": {
+          "x": 1320,
+          "y": 360
+        }
+      },
+      {
+        "id": "zone:international",
+        "type": "zone",
+        "label": "International Competitions Zone",
+        "refId": "international",
+        "position": {
+          "x": 1320,
+          "y": 402
+        }
+      },
+      {
+        "id": "faction:away-team",
+        "type": "faction",
+        "label": "Away Team Faction",
+        "refId": "away-team",
+        "position": {
+          "x": 1320,
+          "y": 444
+        }
+      },
+      {
+        "id": "world_state:aggregate",
+        "type": "event",
+        "label": "World state",
+        "refId": "world",
+        "position": {
+          "x": 1760,
+          "y": 420
+        }
+      },
+      {
+        "id": "action:settle-match",
+        "type": "manualAction",
+        "label": "Settle Match",
+        "refId": "settle-match",
+        "position": {
+          "x": 220,
+          "y": 420
+        }
+      },
+      {
+        "id": "action:review-dispute",
+        "type": "manualAction",
+        "label": "Review Dispute",
+        "refId": "review-dispute",
+        "position": {
+          "x": 220,
+          "y": 500
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge:demoMatchFeed:start-sports-runtime",
+        "source": "data:demoMatchFeed",
+        "target": "trigger:start-sports-runtime",
+        "label": "data_condition",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-sports-runtime:step:0",
+        "source": "trigger:start-sports-runtime",
+        "target": "agent:match-data-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-sports-runtime:step:1",
+        "source": "agent:match-data-reader",
+        "target": "agent:prediction-locker",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-sports-runtime:step:2",
+        "source": "agent:prediction-locker",
+        "target": "agent:sports-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-sports-runtime:output:0",
+        "source": "agent:sports-chronicle",
+        "target": "event:start-sports-runtime:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:start-sports-runtime:output:1",
+        "source": "agent:sports-chronicle",
+        "target": "zone:premier-league",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-sports-runtime:output:2",
+        "source": "agent:sports-chronicle",
+        "target": "faction:prediction-pool",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-sports-runtime:output:3",
+        "source": "agent:sports-chronicle",
+        "target": "world_state:settlementSummary",
+        "label": "settlementSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:demoMatchFeed:manual-match-settlement",
+        "source": "data:demoMatchFeed",
+        "target": "trigger:manual-match-settlement",
+        "label": "manual_action",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-match-settlement:step:0",
+        "source": "trigger:manual-match-settlement",
+        "target": "agent:match-data-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-match-settlement:step:1",
+        "source": "agent:match-data-reader",
+        "target": "agent:settlement-analyst",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-match-settlement:step:2",
+        "source": "agent:settlement-analyst",
+        "target": "agent:team-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-match-settlement:step:3",
+        "source": "agent:team-morale",
+        "target": "agent:sports-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-match-settlement:output:0",
+        "source": "agent:sports-chronicle",
+        "target": "event:manual-match-settlement:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:manual-match-settlement:output:1",
+        "source": "agent:sports-chronicle",
+        "target": "zone:nba",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-match-settlement:output:2",
+        "source": "agent:sports-chronicle",
+        "target": "faction:home-team",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-match-settlement:output:3",
+        "source": "agent:sports-chronicle",
+        "target": "world_state:settlementSummary",
+        "label": "settlementSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:demoMatchFeed:manual-dispute-review",
+        "source": "data:demoMatchFeed",
+        "target": "trigger:manual-dispute-review",
+        "label": "manual_action",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-dispute-review:step:0",
+        "source": "trigger:manual-dispute-review",
+        "target": "agent:settlement-analyst",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-dispute-review:step:1",
+        "source": "agent:settlement-analyst",
+        "target": "agent:sports-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-dispute-review:output:0",
+        "source": "agent:sports-chronicle",
+        "target": "event:manual-dispute-review:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:manual-dispute-review:output:1",
+        "source": "agent:sports-chronicle",
+        "target": "zone:nfl",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-dispute-review:output:2",
+        "source": "agent:sports-chronicle",
+        "target": "faction:dispute-court",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-dispute-review:output:3",
+        "source": "agent:sports-chronicle",
+        "target": "world_state:settlementSummary",
+        "label": "settlementSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:demoMatchFeed:scheduled-match-feed-check",
+        "source": "data:demoMatchFeed",
+        "target": "trigger:scheduled-match-feed-check",
+        "label": "scheduled",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:step:0",
+        "source": "trigger:scheduled-match-feed-check",
+        "target": "agent:match-data-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:step:1",
+        "source": "agent:match-data-reader",
+        "target": "agent:settlement-analyst",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:step:2",
+        "source": "agent:settlement-analyst",
+        "target": "agent:team-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:step:3",
+        "source": "agent:team-morale",
+        "target": "agent:sports-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:output:0",
+        "source": "agent:sports-chronicle",
+        "target": "event:scheduled-match-feed-check:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:output:1",
+        "source": "agent:sports-chronicle",
+        "target": "zone:international",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:output:2",
+        "source": "agent:sports-chronicle",
+        "target": "faction:away-team",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-match-feed-check:output:3",
+        "source": "agent:sports-chronicle",
+        "target": "world_state:settlementSummary",
+        "label": "settlementSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:zone:premier-league:faction:home-team",
+        "source": "zone:premier-league",
+        "target": "faction:home-team",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:nba:faction:away-team",
+        "source": "zone:nba",
+        "target": "faction:away-team",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:nfl:faction:prediction-pool",
+        "source": "zone:nfl",
+        "target": "faction:prediction-pool",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:international:faction:dispute-court",
+        "source": "zone:international",
+        "target": "faction:dispute-court",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:home-team:world",
+        "source": "faction:home-team",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:away-team:world",
+        "source": "faction:away-team",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:prediction-pool:world",
+        "source": "faction:prediction-pool",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:dispute-court:world",
+        "source": "faction:dispute-court",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:action:settle-match:manual-match-settlement",
+        "source": "action:settle-match",
+        "target": "trigger:manual-match-settlement",
+        "label": "manual start",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:action:review-dispute:manual-dispute-review",
+        "source": "action:review-dispute",
+        "target": "trigger:manual-dispute-review",
+        "label": "manual start",
+        "weightPercent": 100
+      }
+    ]
+  },
+  "runtimeLayout": [
+    {
+      "id": "prediction-summary",
+      "title": "Prediction Summary",
+      "kind": "summary",
+      "source": "latestRun.summary"
+    },
+    {
+      "id": "world-graph",
+      "title": "World Graph",
+      "kind": "graph",
+      "source": "graph"
+    },
+    {
+      "id": "agent-responses",
+      "title": "Agent Responses",
+      "kind": "agent_response",
+      "source": "latestRun.agentResponses"
+    },
+    {
+      "id": "event-log",
+      "title": "Live Events",
+      "kind": "event_log",
+      "source": "events"
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts",
+      "kind": "receipt_list",
+      "source": "latestRun.receipts"
+    },
+    {
+      "id": "manual-actions",
+      "title": "Manual Actions",
+      "kind": "manual_actions",
+      "source": "manualActions"
+    }
+  ],
+  "statusPolicy": {
+    "runningStatus": "running",
+    "stoppedStatus": "stopped",
+    "restartRequiresFreshInputs": true
+  },
+  "secrets": [],
+  "lastPublishedAt": null,
+  "config": {
+    "worldSlug": "sports-prediction-league",
+    "sourceTemplateSlug": "sports-prediction-league",
+    "officialTemplate": "sports-prediction-league-v1",
+    "dataMode": "prepared-match-json",
+    "runtimeFoundation": "runtime-foundation-v1",
+    "liveAutonomy": "wallet-deployed-world-contract",
+    "allocationModel": "allocationPercent_compiles_to_manifest_weights"
+  }
+}

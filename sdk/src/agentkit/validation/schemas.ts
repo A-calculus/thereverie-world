@@ -10,12 +10,22 @@ export const PrivateKey = z
   .string()
   .regex(/^0x[0-9a-fA-F]{64}$/, "Must be a valid private key");
 
+const BigIntLike = z
+  .union([z.bigint(), z.number().int(), z.string().regex(/^-?\d+$/)])
+  .transform((value) => BigInt(value));
+const NonNegativeBigIntLike = BigIntLike.refine((value) => value >= 0n, {
+  message: "Must be nonnegative",
+});
+const PositiveBigIntLike = BigIntLike.refine((value) => value > 0n, {
+  message: "Must be positive",
+});
+
 export const AgentRequestOptionsSchema = z
   .object({
     consensusType: z.enum(["majority", "threshold"]).optional(),
-    threshold: z.bigint().positive().optional(),
-    subcommitteeSize: z.bigint().positive().optional(),
-    depositBuffer: z.bigint().nonnegative().optional(),
+    threshold: PositiveBigIntLike.optional(),
+    subcommitteeSize: PositiveBigIntLike.optional(),
+    depositBuffer: NonNegativeBigIntLike.optional(),
     timeoutMs: z.number().int().min(MIN_AGENT_TIMEOUT_MS).optional(),
   })
   .strict();
@@ -29,6 +39,8 @@ export const SdkConfigSchema = z
     callbackReceiverLlm: EthAddress.optional(),
     callbackReceiverPrimary: EthAddress.optional(),
     privateKey: PrivateKey.optional(),
+    walletClient: z.unknown().optional(),
+    account: z.unknown().optional(),
     rpcUrl: z.string().url().optional(),
     wsUrl: z.string().url().optional(),
     timeoutMs: z.number().int().min(MIN_AGENT_TIMEOUT_MS).default(MIN_AGENT_TIMEOUT_MS),
@@ -44,16 +56,6 @@ export type SdkConfig = z.infer<typeof SdkConfigSchema>;
 const withAgentOpts = AgentRequestOptionsSchema.partial();
 
 const Role = z.string().min(1);
-const BigIntLike = z
-  .union([z.bigint(), z.number().int(), z.string().regex(/^-?\d+$/)])
-  .transform((value) => BigInt(value));
-const NonNegativeBigIntLike = BigIntLike.refine((value) => value >= 0n, {
-  message: "Must be nonnegative",
-});
-const PositiveBigIntLike = BigIntLike.refine((value) => value > 0n, {
-  message: "Must be positive",
-});
-
 function requireSameLength(
   value: { roles: string[]; messages: string[] },
   ctx: z.RefinementCtx
@@ -217,9 +219,9 @@ const WebParseBase = z
     description: z.string().min(1).max(512),
     key: z.string().min(1).max(64).default("result"),
     prompt: z.string().min(1).max(1024),
-    resolveUrl: z.boolean().default(true),
-    numPages: z.number().int().min(1).max(5).default(2),
-    confidenceThreshold: z.number().int().min(0).max(100).default(70),
+    resolveUrl: z.boolean().default(false),
+    numPages: z.number().int().min(1).max(5).default(1),
+    confidenceThreshold: z.number().int().min(0).max(100).default(60),
   });
 
 export const WebParseStringOptionsSchema = WebParseBase.extend({

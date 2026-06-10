@@ -1,0 +1,931 @@
+{
+  "uiSlug": "crypto-market-intelligence",
+  "displayName": "Crypto Market Intelligence Arena",
+  "description": "A verifiable market-signal world that reads public token data, updates market zones and strategy factions, and records every signal as a Chronicle-backed recommendation.",
+  "version": "crypto-market-intelligence-v1",
+  "engine": "genericEventWorld",
+  "publicTypes": {
+    "MarketSignal": [
+      "BULLISH",
+      "BEARISH",
+      "NEUTRAL",
+      "VOLATILE"
+    ],
+    "inputs": [
+      "marketPair",
+      "volatilityThreshold",
+      "shockScenario"
+    ]
+  },
+  "inputSchema": [
+    {
+      "id": "marketPair",
+      "label": "Market pair",
+      "type": "select",
+      "required": true,
+      "defaultValue": "BTCUSDT",
+      "options": [
+        {
+          "label": "BTC / USDT",
+          "value": "BTCUSDT"
+        },
+        {
+          "label": "ETH / USDT",
+          "value": "ETHUSDT"
+        },
+        {
+          "label": "SOL / USDT",
+          "value": "SOLUSDT"
+        }
+      ]
+    },
+    {
+      "id": "volatilityThreshold",
+      "label": "Volatility threshold (%)",
+      "type": "number",
+      "required": true,
+      "defaultValue": 3
+    },
+    {
+      "id": "shockScenario",
+      "label": "Manual shock scenario",
+      "type": "text",
+      "required": true,
+      "defaultValue": "BTC drops 4.5% while volume spikes and funding turns defensive."
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "binanceTicker",
+      "name": "Public Token Price JSON",
+      "type": "json",
+      "url": "https://api.binance.com/api/v3/ticker/24hr?symbol={{runtime.inputs.marketPair}}",
+      "method": "GET"
+    }
+  ],
+  "agentChain": [
+    {
+      "id": "market-data-reader",
+      "name": "Market Data Reader",
+      "agentType": "native_json_api",
+      "purpose": "Read public token price, volume, and 24-hour change values.",
+      "inputTemplate": "Inspect public market data for {{runtime.inputs.marketPair}} from {{source.value}}.",
+      "persistResult": false
+    },
+    {
+      "id": "market-risk-analyst",
+      "name": "Market Risk Analyst",
+      "agentType": "native_llm",
+      "purpose": "Classify market climate and recommend HOLD, REDUCE, ACCUMULATE, or WATCH.",
+      "inputTemplate": "Assess {{runtime.inputs.marketPair}} with threshold {{runtime.inputs.volatilityThreshold}} and previous output {{previous.output}}.",
+      "persistResult": false
+    },
+    {
+      "id": "strategy-morale",
+      "name": "Strategy Morale Agent",
+      "agentType": "native_llm",
+      "purpose": "Update Bull, Bear, and Hedge faction confidence.",
+      "inputTemplate": "Map the market signal into Bull, Bear, and Hedge confidence deltas using {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "market-conflict",
+      "name": "Market Conflict Resolver",
+      "agentType": "reverie_custom",
+      "purpose": "Resolve disagreement between strategy factions into one recommendation.",
+      "inputTemplate": "Resolve the strategy disagreement from {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "market-chronicle",
+      "name": "Market Chronicle Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Write the market briefing and receipt-backed recommendation.",
+      "inputTemplate": "Write a concise market Chronicle entry for {{previous.output}}.",
+      "persistResult": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "layer-one-assets",
+      "name": "Layer-1 Assets Zone",
+      "description": "BTC, ETH, SOL, and core settlement assets.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "bull-faction",
+        "climate": "NEUTRAL",
+        "marketClimate": "NEUTRAL"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "defi-protocols",
+      "name": "DeFi Protocols Zone",
+      "description": "DEX, lending, and yield protocol risk.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "bear-faction",
+        "climate": "NEUTRAL",
+        "marketClimate": "NEUTRAL"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "meme-emerging",
+      "name": "Meme / Emerging Zone",
+      "description": "High volatility and new-launch token behavior.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "hedge-faction",
+        "climate": "NEUTRAL",
+        "marketClimate": "NEUTRAL"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "stablecoin-yield",
+      "name": "Stablecoin / Yield Zone",
+      "description": "Lower-volatility and defensive market instruments.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "bull-faction",
+        "climate": "NEUTRAL",
+        "marketClimate": "NEUTRAL"
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "factions": [
+    {
+      "id": "bull-faction",
+      "name": "Bull Faction",
+      "description": "Momentum strategy seeking risk-on opportunities.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 34,
+        "narrative": "Bull Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 34
+    },
+    {
+      "id": "bear-faction",
+      "name": "Bear Faction",
+      "description": "Defensive strategy seeking capital preservation.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 33,
+        "narrative": "Bear Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 33
+    },
+    {
+      "id": "hedge-faction",
+      "name": "Neutral / Hedge Faction",
+      "description": "Volatility-managed strategy balancing both sides.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 33,
+        "narrative": "Neutral / Hedge Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 33
+    }
+  ],
+  "triggers": [
+    {
+      "id": "start-market-runtime",
+      "name": "Start Market Intelligence Runtime",
+      "type": "data_condition",
+      "sourceId": "binanceTicker",
+      "condition": {
+        "isStartTrigger": true
+      },
+      "sourceConfig": {
+        "kind": "builder_input",
+        "sourceId": "marketPair",
+        "path": ""
+      },
+      "typeConfig": {
+        "conditionEnabled": false,
+        "operator": "exists",
+        "compareValue": ""
+      },
+      "inputParser": "{\n  \"marketPair\": \"{{runtime.inputs.marketPair}}\",\n  \"volatilityThreshold\": \"{{runtime.inputs.volatilityThreshold}}\",\n  \"source\": \"{{source.value}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Market event log",
+          "path": "eventLog",
+          "valueTemplate": "Start Market Intelligence Runtime completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "layer-one-assets",
+          "path": "latestDecision",
+          "valueTemplate": "Start Market Intelligence Runtime updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "hedge-faction",
+          "path": "latestDecision",
+          "valueTemplate": "Start Market Intelligence Runtime updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "marketSignalSummary",
+          "valueTemplate": "Start Market Intelligence Runtime completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "market-data-reader",
+        "market-risk-analyst",
+        "strategy-morale",
+        "market-conflict",
+        "market-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "manual-market-shock",
+      "name": "Manual Market Shock Analysis",
+      "type": "manual_action",
+      "sourceId": "binanceTicker",
+      "sourceConfig": {
+        "kind": "manual_payload",
+        "path": ""
+      },
+      "typeConfig": {
+        "buttonLabel": "Run Market Shock",
+        "description": "Analyze a prepared market shock and write a recommendation.",
+        "payloadTemplate": "{\n  \"scenario\": \"{{runtime.inputs.shockScenario}}\",\n  \"marketPair\": \"{{runtime.inputs.marketPair}}\"\n}"
+      },
+      "inputParser": "{\n  \"scenario\": \"{{runtime.inputs.shockScenario}}\",\n  \"payload\": \"{{trigger.payload}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Market event log",
+          "path": "eventLog",
+          "valueTemplate": "Manual Market Shock Analysis completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "defi-protocols",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Market Shock Analysis updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "bear-faction",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Market Shock Analysis updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "marketSignalSummary",
+          "valueTemplate": "Manual Market Shock Analysis completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "market-risk-analyst",
+        "strategy-morale",
+        "market-conflict",
+        "market-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "scheduled-market-scan",
+      "name": "Scheduled Market Scan",
+      "type": "scheduled",
+      "sourceId": "binanceTicker",
+      "sourceConfig": {
+        "kind": "data_source",
+        "sourceId": "binanceTicker",
+        "path": "body"
+      },
+      "typeConfig": {
+        "cronExpression": "*/15 * * * *",
+        "timezone": "UTC"
+      },
+      "inputParser": "{\n  \"marketPair\": \"{{runtime.inputs.marketPair}}\",\n  \"ticker\": \"{{source.value}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Market event log",
+          "path": "eventLog",
+          "valueTemplate": "Scheduled Market Scan completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "meme-emerging",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Market Scan updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "bull-faction",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Market Scan updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "marketSignalSummary",
+          "valueTemplate": "Scheduled Market Scan completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "market-data-reader",
+        "market-risk-analyst",
+        "strategy-morale",
+        "market-chronicle"
+      ],
+      "isActive": true
+    }
+  ],
+  "manualActions": [
+    {
+      "id": "run-market-shock",
+      "label": "Run Market Shock",
+      "description": "Run the configured market shock scenario.",
+      "triggerId": "manual-market-shock",
+      "ownerOnly": true
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "input:marketPair",
+        "type": "input",
+        "label": "Market pair",
+        "refId": "marketPair",
+        "position": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "input:volatilityThreshold",
+        "type": "input",
+        "label": "Volatility threshold (%)",
+        "refId": "volatilityThreshold",
+        "position": {
+          "x": 0,
+          "y": 90
+        }
+      },
+      {
+        "id": "input:shockScenario",
+        "type": "input",
+        "label": "Manual shock scenario",
+        "refId": "shockScenario",
+        "position": {
+          "x": 0,
+          "y": 180
+        }
+      },
+      {
+        "id": "data:binanceTicker",
+        "type": "dataSource",
+        "label": "Public Token Price JSON",
+        "refId": "binanceTicker",
+        "position": {
+          "x": 220,
+          "y": 0
+        }
+      },
+      {
+        "id": "trigger:start-market-runtime",
+        "type": "trigger",
+        "label": "Start Market Intelligence Runtime",
+        "refId": "start-market-runtime",
+        "position": {
+          "x": 440,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:market-data-reader",
+        "type": "agent",
+        "label": "Market Data Reader",
+        "refId": "market-data-reader",
+        "position": {
+          "x": 660,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:market-risk-analyst",
+        "type": "agent",
+        "label": "Market Risk Analyst",
+        "refId": "market-risk-analyst",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:strategy-morale",
+        "type": "agent",
+        "label": "Strategy Morale Agent",
+        "refId": "strategy-morale",
+        "position": {
+          "x": 1020,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:market-conflict",
+        "type": "agent",
+        "label": "Market Conflict Resolver",
+        "refId": "market-conflict",
+        "position": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:market-chronicle",
+        "type": "agent",
+        "label": "Market Chronicle Agent",
+        "refId": "market-chronicle",
+        "position": {
+          "x": 1380,
+          "y": 0
+        }
+      },
+      {
+        "id": "event:start-market-runtime:0",
+        "type": "event",
+        "label": "Market event log",
+        "refId": "Market event log",
+        "position": {
+          "x": 1320,
+          "y": 0
+        }
+      },
+      {
+        "id": "zone:layer-one-assets",
+        "type": "zone",
+        "label": "Layer-1 Assets Zone",
+        "refId": "layer-one-assets",
+        "position": {
+          "x": 1320,
+          "y": 42
+        }
+      },
+      {
+        "id": "faction:hedge-faction",
+        "type": "faction",
+        "label": "Neutral / Hedge",
+        "refId": "hedge-faction",
+        "position": {
+          "x": 1320,
+          "y": 84
+        }
+      },
+      {
+        "id": "world_state:marketSignalSummary",
+        "type": "event",
+        "label": "marketSignalSummary",
+        "refId": "marketSignalSummary",
+        "position": {
+          "x": 1320,
+          "y": 126
+        }
+      },
+      {
+        "id": "trigger:manual-market-shock",
+        "type": "trigger",
+        "label": "Manual Market Shock Analysis",
+        "refId": "manual-market-shock",
+        "position": {
+          "x": 440,
+          "y": 120
+        }
+      },
+      {
+        "id": "event:manual-market-shock:0",
+        "type": "event",
+        "label": "Market event log",
+        "refId": "Market event log",
+        "position": {
+          "x": 1320,
+          "y": 120
+        }
+      },
+      {
+        "id": "zone:defi-protocols",
+        "type": "zone",
+        "label": "DeFi Protocols Zone",
+        "refId": "defi-protocols",
+        "position": {
+          "x": 1320,
+          "y": 162
+        }
+      },
+      {
+        "id": "faction:bear-faction",
+        "type": "faction",
+        "label": "Bear Faction",
+        "refId": "bear-faction",
+        "position": {
+          "x": 1320,
+          "y": 204
+        }
+      },
+      {
+        "id": "trigger:scheduled-market-scan",
+        "type": "trigger",
+        "label": "Scheduled Market Scan",
+        "refId": "scheduled-market-scan",
+        "position": {
+          "x": 440,
+          "y": 240
+        }
+      },
+      {
+        "id": "event:scheduled-market-scan:0",
+        "type": "event",
+        "label": "Market event log",
+        "refId": "Market event log",
+        "position": {
+          "x": 1320,
+          "y": 240
+        }
+      },
+      {
+        "id": "zone:meme-emerging",
+        "type": "zone",
+        "label": "Meme / Emerging",
+        "refId": "meme-emerging",
+        "position": {
+          "x": 1320,
+          "y": 282
+        }
+      },
+      {
+        "id": "faction:bull-faction",
+        "type": "faction",
+        "label": "Bull Faction",
+        "refId": "bull-faction",
+        "position": {
+          "x": 1320,
+          "y": 324
+        }
+      },
+      {
+        "id": "zone:stablecoin-yield",
+        "type": "zone",
+        "label": "Stablecoin / Yield Zone",
+        "refId": "stablecoin-yield",
+        "position": {
+          "x": 1320,
+          "y": 600
+        }
+      },
+      {
+        "id": "world_state:aggregate",
+        "type": "event",
+        "label": "World state",
+        "refId": "world",
+        "position": {
+          "x": 1760,
+          "y": 420
+        }
+      },
+      {
+        "id": "action:run-market-shock",
+        "type": "manualAction",
+        "label": "Run Market Shock",
+        "refId": "run-market-shock",
+        "position": {
+          "x": 220,
+          "y": 420
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge:binanceTicker:start-market-runtime",
+        "source": "data:binanceTicker",
+        "target": "trigger:start-market-runtime",
+        "label": "data_condition",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-market-runtime:step:0",
+        "source": "trigger:start-market-runtime",
+        "target": "agent:market-data-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-market-runtime:step:1",
+        "source": "agent:market-data-reader",
+        "target": "agent:market-risk-analyst",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-market-runtime:step:2",
+        "source": "agent:market-risk-analyst",
+        "target": "agent:strategy-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-market-runtime:step:3",
+        "source": "agent:strategy-morale",
+        "target": "agent:market-conflict",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-market-runtime:step:4",
+        "source": "agent:market-conflict",
+        "target": "agent:market-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-market-runtime:output:0",
+        "source": "agent:market-chronicle",
+        "target": "event:start-market-runtime:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:start-market-runtime:output:1",
+        "source": "agent:market-chronicle",
+        "target": "zone:layer-one-assets",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-market-runtime:output:2",
+        "source": "agent:market-chronicle",
+        "target": "faction:hedge-faction",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-market-runtime:output:3",
+        "source": "agent:market-chronicle",
+        "target": "world_state:marketSignalSummary",
+        "label": "marketSignalSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:binanceTicker:manual-market-shock",
+        "source": "data:binanceTicker",
+        "target": "trigger:manual-market-shock",
+        "label": "manual_action",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-market-shock:step:0",
+        "source": "trigger:manual-market-shock",
+        "target": "agent:market-risk-analyst",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-market-shock:step:1",
+        "source": "agent:market-risk-analyst",
+        "target": "agent:strategy-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-market-shock:step:2",
+        "source": "agent:strategy-morale",
+        "target": "agent:market-conflict",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-market-shock:step:3",
+        "source": "agent:market-conflict",
+        "target": "agent:market-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-market-shock:output:0",
+        "source": "agent:market-chronicle",
+        "target": "event:manual-market-shock:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:manual-market-shock:output:1",
+        "source": "agent:market-chronicle",
+        "target": "zone:defi-protocols",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-market-shock:output:2",
+        "source": "agent:market-chronicle",
+        "target": "faction:bear-faction",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-market-shock:output:3",
+        "source": "agent:market-chronicle",
+        "target": "world_state:marketSignalSummary",
+        "label": "marketSignalSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:binanceTicker:scheduled-market-scan",
+        "source": "data:binanceTicker",
+        "target": "trigger:scheduled-market-scan",
+        "label": "scheduled",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-market-scan:step:0",
+        "source": "trigger:scheduled-market-scan",
+        "target": "agent:market-data-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-market-scan:step:1",
+        "source": "agent:market-data-reader",
+        "target": "agent:market-risk-analyst",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-market-scan:step:2",
+        "source": "agent:market-risk-analyst",
+        "target": "agent:strategy-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-market-scan:step:3",
+        "source": "agent:strategy-morale",
+        "target": "agent:market-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-market-scan:output:0",
+        "source": "agent:market-chronicle",
+        "target": "event:scheduled-market-scan:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:scheduled-market-scan:output:1",
+        "source": "agent:market-chronicle",
+        "target": "zone:meme-emerging",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-market-scan:output:2",
+        "source": "agent:market-chronicle",
+        "target": "faction:bull-faction",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-market-scan:output:3",
+        "source": "agent:market-chronicle",
+        "target": "world_state:marketSignalSummary",
+        "label": "marketSignalSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:zone:layer-one-assets:faction:bull-faction",
+        "source": "zone:layer-one-assets",
+        "target": "faction:bull-faction",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:defi-protocols:faction:bear-faction",
+        "source": "zone:defi-protocols",
+        "target": "faction:bear-faction",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:meme-emerging:faction:hedge-faction",
+        "source": "zone:meme-emerging",
+        "target": "faction:hedge-faction",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:stablecoin-yield:faction:bull-faction",
+        "source": "zone:stablecoin-yield",
+        "target": "faction:bull-faction",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:bull-faction:world",
+        "source": "faction:bull-faction",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 34
+      },
+      {
+        "id": "edge:faction:bear-faction:world",
+        "source": "faction:bear-faction",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 33
+      },
+      {
+        "id": "edge:faction:hedge-faction:world",
+        "source": "faction:hedge-faction",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 33
+      },
+      {
+        "id": "edge:action:run-market-shock:manual-market-shock",
+        "source": "action:run-market-shock",
+        "target": "trigger:manual-market-shock",
+        "label": "manual start",
+        "weightPercent": 100
+      }
+    ]
+  },
+  "runtimeLayout": [
+    {
+      "id": "market-summary",
+      "title": "Market Summary",
+      "kind": "summary",
+      "source": "latestRun.summary"
+    },
+    {
+      "id": "world-graph",
+      "title": "World Graph",
+      "kind": "graph",
+      "source": "graph"
+    },
+    {
+      "id": "agent-responses",
+      "title": "Agent Responses",
+      "kind": "agent_response",
+      "source": "latestRun.agentResponses"
+    },
+    {
+      "id": "event-log",
+      "title": "Live Events",
+      "kind": "event_log",
+      "source": "events"
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts",
+      "kind": "receipt_list",
+      "source": "latestRun.receipts"
+    },
+    {
+      "id": "manual-actions",
+      "title": "Manual Actions",
+      "kind": "manual_actions",
+      "source": "manualActions"
+    }
+  ],
+  "statusPolicy": {
+    "runningStatus": "running",
+    "stoppedStatus": "stopped",
+    "restartRequiresFreshInputs": true
+  },
+  "secrets": [],
+  "lastPublishedAt": null,
+  "config": {
+    "worldSlug": "crypto-market-intelligence",
+    "sourceTemplateSlug": "crypto-market-intelligence",
+    "officialTemplate": "crypto-market-intelligence-v1",
+    "dataMode": "public-token-json",
+    "runtimeFoundation": "runtime-foundation-v1",
+    "liveAutonomy": "wallet-deployed-world-contract",
+    "allocationModel": "allocationPercent_compiles_to_manifest_weights"
+  }
+}

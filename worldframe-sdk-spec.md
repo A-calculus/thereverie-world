@@ -1,13 +1,17 @@
 # `@worldframe/sdk` — Agent Layer & Somnia Native Agents Specification
 
-> **Version:** 1.1 — Phase 1 Testnet Edition  
+> **Version:** 1.4 — Contract-Funded Live Runtime Update  
 > **Network:** Somnia Testnet · Chain ID `50312` · Native Token `STT`  
 > **Status:** Single source of truth for the embedded agent layer inside `@worldframe/sdk`  
-> **Phase 1 scope:** Testnet only. No mainnet support. Mainnet constants below are reference-only.
+> **Network scope:** Testnet only. No mainnet support. Mainnet constants below are reference-only.
 
 **Related docs:** [REVERIE Phase 1.md](REVERIE%20Phase%201.md) (deploy, wallets, smoke test) · [ProjectIdea.md](ProjectIdea.md) (product vision)
 
-This is **not** a standalone `@somnia/agentkit` npm package. Implementation lives at `sdk/src/agentkit/` and is re-exported from `sdk/src/index.ts` as `SomniaAgentKit`, `calculateDeposit`, and related types.
+This is **not** a standalone `@somnia/agentkit` npm package. Implementation lives at `sdk/src/agentkit/` and is re-exported from `sdk/src/index.ts` and `sdk/src/browser.ts` as `SomniaAgentKit`, `WorldFrameSDK`, `WorldInstance`, live manifest helpers, REVERIE agent metadata, `calculateDeposit`, and related types.
+
+**Current Phase 2 integration note:** the no-code frontend must pass a viem `walletClient` from the connected browser wallet into the SDK. Frontend applications must not ask users for private keys. Node.js scripts can still use `privateKey` for backend automation.
+
+**Live world deployment note:** frontend builders compile to a contract-safe manifest with `compileWorldManifest()`. Browser flows use `sdk.deployWorldManifest()` to deploy the registry world, configure the manifest on `ReverieWorldInstance`, fund the world, register Somnia Reactivity subscriptions, and persist confirmed transaction data through the frontend completion APIs.
 
 ## Table of Contents
 
@@ -37,15 +41,30 @@ This is **not** a standalone `@somnia/agentkit` npm package. Implementation live
 
 ## 0. WorldFrame SDK Product Map
 
-| Item | Phase 1 |
+| Item | Current implementation |
 |------|---------|
 | **Package** | `@worldframe/sdk` (`sdk/package.json`) |
-| **Public API** | `WorldFrameSDK`, `WorldInstance`, `native.llm` / `jsonApi` / `webParse`, `world.agents.*` (4 REVERIE agents) |
+| **Public API** | `WorldFrameSDK`, `WorldInstance`, `compileWorldManifest`, `deployWorldManifest`, `native.llm` / `jsonApi` / `webParse`, `world.agents.*` (4 REVERIE agents), SDK agent metadata helpers |
 | **Agent layer** | Embedded `SomniaAgentKit` at `sdk/src/agentkit/` — seven agents total (3 native + 4 REVERIE) |
-| **Platform calls** | `createAdvancedRequest` with consensus (`majority` / `threshold`), env defaults in `addresses.ts` |
+| **Platform calls** | `createAdvancedRequest` with consensus (`majority` / `threshold`), injected browser `walletClient` or backend private key, env defaults in `addresses.ts` |
 | **Dependencies** | Pinned: `viem@2.37.8`, `@somnia-chain/reactivity@0.1.10` (avoid `0.2.0` — broken npm `dist/`) |
-| **Contracts project** | Separate `contracts/` repo folder — deploy with `DEPLOYER_PRIVATE_KEY`; SDK uses builder wallet + `.env` addresses |
+| **Contracts project** | Separate `contracts/` repo folder — deploy infrastructure with `DEPLOYER_PRIVATE_KEY`; frontend SDK flows use the connected builder wallet for world deployment and the deployed world contract as callback/reactivity handler |
 | **Out of scope** | Standalone agentkit publish, mainnet, custom Somnia agents (platform Phase 2) |
+
+### 0.1 Live Manifest World Runtime
+
+The Phase 2 no-code frontend now treats the world contract as the source of truth for autonomous execution:
+
+- `compileWorldManifest(builderConfig)` converts builder zones, factions, triggers, and supported agent chains into compact contract inputs plus a deterministic `manifestHash`.
+- `sdk.deployWorldManifest({ name, template, builderConfig, subscribeTriggers })` deploys through the registry, calls `WorldInstance.configureManifest()`, and optionally calls `subscribeTrigger()` for contract-event triggers with emitter/topic data.
+- `WorldInstance` exposes live lifecycle methods: `configureManifest()`, `fund()`, `armWorld()`, `pauseWorld()`, `stopWorld()`, `fireManualTrigger()`, `subscribeTrigger()`, `unsubscribeTrigger()`, `getLiveState()`, `watchRuntimeEvents()`, and `waitForTransaction()`.
+- Deployed world workflows call native agents from the world contract. The contract computes the platform deposit plus runner/network buffer per agent call and sends value from `address(this).balance`; unused STT is refunded by the Somnia platform.
+- Allocation is the only user-facing weight input. Zone/faction `allocationPercent` and trigger output priorities compile to integer relationship weights in the manifest hash.
+- Somnia Reactivity subscriptions are contract-owned. Browser WSS watches are suitable for UI display and reconciliation hints, not primary autonomous execution.
+- Scheduled triggers use fixed minute/hour/weekday cron patterns that compile to Somnia schedule subscriptions. Broader calendar cron can validate in the UI but is blocked from autonomous subscription until supported.
+- Receipt URLs use `https://agents.testnet.somnia.network/receipts/{requestId}`.
+
+Supported autonomous manifest recipes currently compile native LLM, JSON API, Web Parse, Chronicle, Zone Climate, Conflict Resolution, and Faction Morale flows. User-created agents can be tested directly through the SDK, but they are only live-world deployable when their configuration compiles into one of the supported recipes.
 
 ---
 
@@ -89,7 +108,7 @@ CallbackReceiver (emits AgentResult event)
 SDK Promise resolves with decoded text
 ```
 
-**Key guarantee:** The final result is tamper-proof — verified by multiple independent validators. Every invocation produces an execution receipt (auditable at `https://receipts.testnet.agents.somnia.host`).
+**Key guarantee:** The final result is tamper-proof — verified by multiple independent validators. Every invocation produces an execution receipt (auditable at `https://agents.testnet.somnia.network/receipts/{requestId}`).
 
 ### 1.2 Phase 1 Agents (Currently Available)
 
@@ -305,17 +324,26 @@ Each `createAdvancedRequest()` returns a unique `requestId` (a `uint256`, not `b
 | **Native Token** | `STT` (18 decimals) |
 | **Block Explorer** | `https://shannon-explorer.somnia.network` |
 | **Agent Explorer** | `https://agents.testnet.somnia.network` |
-| **Receipts Service** | `https://receipts.testnet.agents.somnia.host` |
+| **Receipts Explorer** | `https://agents.testnet.somnia.network/receipts/{requestId}` |
 | **Faucet** | `https://testnet.somnia.network` |
+
+SDK-created public clients use the WebSocket RPC first. If WSS fails after 2 retries, the SDK logs the WSS transport error and falls back to HTTP. Native agent callback listening still uses `CallbackReceiver` WSS for fast delivery, with HTTP polling as the fallback wait path.
+
+SDK result objects and SDK errors expose receipt links using the browser-friendly explorer URL `https://agents.testnet.somnia.network/receipts/{requestId}`. Older receipt-host links should be treated as stale.
+
+Server receipt-detail fetches use Somnia's receipt service with the fixed native-agent platform address:
+
+```text
+https://receipts.testnet.agents.somnia.host/agent-receipts?contractAddress=0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776&requestId={requestId}
+```
 
 ### 5.2 Platform Contracts
 
-> ⚠️ **Critical:** There are **two** platform addresses. Each agent uses a specific one. Using the wrong address will cause the transaction to revert or time out.
+> ⚠️ **Critical:** Current testnet native-agent calls and receipt fetches use the same platform address. Keep this value centralized so future Somnia deployments can update it in one place.
 
 | Contract | Address | Used by |
 |----------|---------|---------|
-| **Platform (Primary)** | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | JSON API Request, LLM Parse Website |
-| **Platform (Alternate)** | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | LLM Inference |
+| **Native Agent Platform** | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | LLM Inference, JSON API Request, LLM Parse Website, receipt fetches |
 | **Agent Registry** | `0x08D1Fc808f1983d2Ea7B63a28ECD4d8C885Cd02A` | Registry lookup |
 | **Reactivity Precompile** | `0x0000000000000000000000000000000000000100` | Pub/sub |
 
@@ -628,18 +656,22 @@ somnia-docs/
 └── sdk/                            ← @worldframe/sdk
     ├── package.json                ← pinned: viem@2.37.8, zod@3.23.8, reactivity@0.1.10
     ├── src/index.ts                ← WorldFrameSDK + re-exports
+    ├── src/browser.ts              ← browser-safe exports for frontend wallet-client usage
     ├── src/agentkit/               ← embedded SomniaAgentKit (this spec)
     │   ├── SomniaAgentKit.ts, utils/request.ts, utils/deposit.ts
     │   └── contracts/addresses.ts, abis.ts
+    ├── src/agents/metadata.ts      ← official REVERIE SDK agent definitions and world styles
     ├── src/native/, src/agents/, src/reactivity/
     └── dist/                       ← npm run build
 ```
 
 ### 7.2 Configuration
 
-- **Builder wallet:** `BUILDER_PRIVATE_KEY` or browser `mode: 'browser'` — STT deposits, `deployWorld`, agents
+- **Builder wallet:** `BUILDER_PRIVATE_KEY` for backend scripts, or an injected viem `walletClient` for browser applications — STT deposits, `deployWorld`, agents
 - **Deployer wallet:** `contracts/.env` only — never used by SDK for agent payments
 - **Addresses:** env-first in `sdk/src/agentkit/contracts/addresses.ts` with documented fallbacks (`DEFAULT_SUBCOMMITTEE_SIZE`, `DEFAULT_CONSENSUS_TYPE`, `DEFAULT_DEPOSIT_BUFFER`, …)
+- **Frontend callback addresses:** browser apps pass `callbackReceiverLlm` and `callbackReceiverPrimary` from public env vars. The SDK never receives or stores a frontend private key.
+- **Official agent metadata:** `REVERIE_SDK_AGENT_DEFINITIONS`, world style options, default runtime settings, and deterministic zone-id helpers are exported by the SDK so REVERIE can render official agents without hardcoded frontend demo data.
 
 ### 7.3 `tsconfig.json` (sdk/)
 
@@ -1218,7 +1250,7 @@ msg.value = getRequestDeposit()           // operations-reserve floor
 
 > ⚠️ Sending only `getRequestDeposit()` floor is **not enough**. The floor covers operations only. Runners will see `perAgentBudget = 0` and skip the job.
 
-### 10.3 Deposit buffer (Phase 1 — always overpay)
+### 10.3 Deposit Buffers And World-Funded Calls
 
 In practice, the calculated minimum is often **still too low** for slow jobs (especially web parse). The SDK therefore:
 
@@ -1226,13 +1258,23 @@ In practice, the calculated minimum is often **still too low** for slow jobs (es
 - Accepts optional per-call `depositBuffer` in agent options
 - **Excess STT is refunded** to the sender after execution — prefer padding over underpaying
 
+For deployed REVERIE worlds, the sender is the world contract. `ReverieWorldInstance` uses internal runner-fee and buffer constants to calculate:
+
+```text
+platform advanced-request deposit
++ runner fee per selected agent kind and subcommittee
++ fixed runner/network buffer
++ percentage buffer
+```
+
+The value is sent from the funded world balance for each native-agent workflow step. The frontend funding estimate should keep the world balance above the recommended run cost, but the contract performs the final per-call value calculation at execution time.
+
 ### 10.4 `sdk/src/agentkit/utils/deposit.ts`
 
 ```typescript
-import { createPublicClient, http } from 'viem';
-import { somniaTestnet } from '../chain/somnia';
 import { AGENTS_PLATFORM_ABI } from '../contracts/abis';
 import { getPlatformAddress, PER_AGENT_PRICES } from '../contracts/addresses';
+import { createSdkPublicClient } from '../../transports';
 
 const DEFAULT_SUBCOMMITTEE = 3n;
 
@@ -1244,17 +1286,16 @@ const DEFAULT_SUBCOMMITTEE = 3n;
  *
  * @param agentType  The type of agent being invoked
  * @param buffer     Optional extra STT in wei (safety margin for busy conditions)
- * @param rpcUrl     Optional RPC URL override
+ * @param rpcUrl     Optional HTTP RPC URL override
+ * @param wsUrl      Optional WSS RPC URL override
  */
 export async function calculateDeposit(
   agentType: 'llm' | 'jsonApi' | 'webParse',
   buffer = 0n,
   rpcUrl?: string,
+  wsUrl?: string,
 ): Promise<bigint> {
-  const client = createPublicClient({
-    chain: somniaTestnet,
-    transport: http(rpcUrl ?? 'https://api.infra.testnet.somnia.network'),
-  });
+  const client = createSdkPublicClient({ rpcUrl, wsUrl });
 
   const platformAddress = getPlatformAddress(agentType);
 
@@ -1438,7 +1479,6 @@ export class WebSocketManager {
 
 ```typescript
 import {
-  createPublicClient,
   createWalletClient,
   http,
   custom,
@@ -1644,6 +1684,41 @@ await world.agents.chronicle.invoke(
 ```
 
 Use `WorldFrameSDK` for worlds and the easier REVERIE agents. Use `SomniaAgentKit` directly when you want exact native-agent methods and output types.
+
+### 15.0.1 Browser Frontend — injected wallet client
+
+Frontend applications must inject a connected wallet client instead of collecting a private key:
+
+```typescript
+import { createWalletClient, custom } from 'viem';
+import { SomniaAgentKit, somniaTestnet } from '@worldframe/sdk/browser';
+
+const walletClient = createWalletClient({
+  chain: somniaTestnet,
+  transport: custom(window.ethereum),
+});
+
+const [account] = await walletClient.requestAddresses();
+
+const kit = new SomniaAgentKit({
+  network: 'testnet',
+  rpcUrl: process.env.NEXT_PUBLIC_SOMNIA_TESTNET_RPC,
+  callbackReceiverLlm: process.env.NEXT_PUBLIC_CALLBACK_RECEIVER_LLM as `0x${string}`,
+  callbackReceiverPrimary: process.env.NEXT_PUBLIC_CALLBACK_RECEIVER_PRIMARY as `0x${string}`,
+  walletClient,
+  account,
+});
+
+const result = await kit.executeJsonApi({
+  method: 'fetchString',
+  url: 'https://jsonplaceholder.typicode.com/todos/1',
+  selector: 'title',
+});
+
+console.log(result.value);
+console.log(result.receiptUrl); // https://agents.testnet.somnia.network/receipts/{requestId}
+kit.destroy();
+```
 
 ### 15.1 Node.js Backend — LLM Inference (agent layer only)
 
@@ -1893,13 +1968,13 @@ try {
 
   } else if (err instanceof SomniaTimeoutError) {
     // Transaction submitted, job didn't complete in time
-    // Check receipt service for status
-    const receiptUrl = `https://receipts.testnet.agents.somnia.host?requestId=${err.requestId}`;
+    // Check the agent explorer receipt for status
+    const receiptUrl = `https://agents.testnet.somnia.network/receipts/${err.requestId}`;
     console.error('Timed out. Check:', receiptUrl);
 
   } else if (err instanceof SomniaAgentFailedError) {
     // Validators reported execution failure (e.g. bad URL, LLM error)
-    const receiptUrl = `https://receipts.testnet.agents.somnia.host?requestId=${err.requestId}`;
+    const receiptUrl = `https://agents.testnet.somnia.network/receipts/${err.requestId}`;
     console.error('Agent failed. Check receipt:', receiptUrl);
 
   } else if (err instanceof SomniaWebSocketError) {
@@ -1930,13 +2005,13 @@ try {
 | 6 | **`ExtractString` 8-arg vs 7-arg** | Old 7-arg signature (`0xbb2cde46`) causes validator errors. | Always use 8-arg with `confidenceThreshold` (`0xc2dd1a7a`). |
 | 7 | **LLM Parse Website timeout** | Agent can take longer than simple JSON/LLM calls. | Use at least the SDK minimum timeout; the `reverie` web parse test uses `380_000`. |
 | 8 | **Somnia gas model is 9–476× Ethereum** | Cold SLOAD = 1,000,100 gas. New storage slot = 200,100 gas. CallbackReceiver must be stateless. | No mappings, no storage in receiver. |
-| 9 | **eth_getLogs capped at 1000 blocks** | At ~10 blocks/second, polling windows exceed this quickly. | Use WebSocket subscriptions, not event polling. |
+| 9 | **eth_getLogs capped at 1000 blocks** | At ~10 blocks/second, polling windows exceed this quickly. | Reconcile in chunks of at most 1000 blocks and use WebSocket subscriptions only for display hints. |
 | 10 | **Testnet-only scope** | This SDK targets testnet only. Mainnet values (chain ID `5031`, token `SOMI`) differ. | Do not use mainnet addresses with this SDK. |
 | 11 | **`getRequestDeposit()` name vs `getRequiredDeposit()`** | Earlier drafts show `getRequiredDeposit()`. The actual function is `getRequestDeposit()`. | Call `getRequestDeposit()` (no "Required"). |
 | 12 | **`viaIR: true` required in Hardhat** | Without it, the Solidity compiler hits stack-too-deep on multi-string payloads. | Add `viaIR: true` in `hardhat.config.ts`. |
 | 13 | **Foundry Gas Discrepancy** | Foundry's gas estimation does not natively match Somnia's gas model. | The `--gas-estimate-multiplier` flag **must** be used to compensate for the discrepancy. Adjust upward for complex deployments with many cold storage accesses. |
 | 14 | **EIP-1559 Transactions Stalling** | Some public RPC gateways struggle with EIP-1559 gas prices. | Configure transactions to use **legacy gasPrice** (not EIP-1559 maxFeePerGas). |
-| 15 | **Deposit buffer** | Floor + runner fee often insufficient for slow jobs. | Use `DEFAULT_DEPOSIT_BUFFER` + optional `depositBuffer`; excess refunded. |
+| 15 | **Deposit buffer** | Floor + runner fee often insufficient for slow jobs. | Direct SDK tests use `DEFAULT_DEPOSIT_BUFFER`/`depositBuffer`; deployed worlds use contract-side per-agent runner/network buffers. Excess is refunded. |
 | 16 | **viem peer for reactivity** | `@somnia-chain/reactivity` requires `viem@~2.37.8`. | Pin `viem@2.37.8` in `sdk/package.json`. |
 | 17 | **reactivity@0.2.0 npm** | Tarball missing `dist/`. | Use `@somnia-chain/reactivity@0.1.10`. |
 | 18 | **Wallet separation** | Deployer key must not pay agent STT. | `DEPLOYER_PRIVATE_KEY` in `contracts/` only; builder in SDK. |
@@ -1954,7 +2029,7 @@ TESTNET NETWORK
   RPC WSS  : wss://api.infra.testnet.somnia.network/ws
   Explorer : https://shannon-explorer.somnia.network
   Agents   : https://agents.testnet.somnia.network
-  Receipts : https://receipts.testnet.agents.somnia.host
+  Receipts : https://agents.testnet.somnia.network/receipts/{requestId}
   Faucet   : https://testnet.somnia.network
 
 PLATFORM CONTRACTS

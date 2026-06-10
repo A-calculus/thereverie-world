@@ -36,7 +36,12 @@ export class SomniaTimeoutError extends SomniaError {
 export class SomniaAgentFailedError extends SomniaError {
   constructor(
     public readonly requestId: bigint,
-    public readonly status?: number
+    public readonly status?: number,
+    public readonly context?: {
+      txHash?: `0x${string}`;
+      receiptUrl?: string;
+      callbackAddress?: `0x${string}`;
+    }
   ) {
     super(`Agent request ${requestId} failed`, "AGENT_FAILED");
     this.name = "SomniaAgentFailedError";

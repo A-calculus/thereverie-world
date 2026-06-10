@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #0D0B1E;
+  --color-surface: #130F2A;
+  --color-dream: #9B7FE8;
+  --color-aurora: #C4A8FF;
+  --color-teal: #5DE8D8;
+  --color-text-primary: #F0EBF8;
+  --color-text-muted: #8A80A8;
+  --color-glow-purple: rgba(155,127,232,0.3);
+
+  --font-display: "Cormorant Garamond", serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --radius-xl: 16px;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-void text-text-primary font-sans antialiased min-h-screen overflow-x-hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-wide;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(19, 15, 42, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(155, 127, 232, 0.2);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 0 40px rgba(155, 127, 232, 0.08), inset 0 1px 0 rgba(240, 235, 248, 0.05);
+  }
+  
+  .glass-panel-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+  
+  .glass-panel-hover:hover {
+    border: 1px solid rgba(155, 127, 232, 0.4);
+    box-shadow: 0 0 50px rgba(155, 127, 232, 0.15), inset 0 1px 0 rgba(240, 235, 248, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-dream via-aurora to-teal;
+  }
+
+  .bg-aurora {
+    background: radial-gradient(ellipse at 30% 50%, rgba(93,232,216,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 20%, rgba(155,127,232,0.18) 0%, transparent 55%);
+  }
+
+  .react-flow__node {
+    color: var(--color-text-primary);
+  }
+
+  .reverie-flow .react-flow__controls {
+    border: 1px solid rgba(93, 232, 216, 0.45);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  }
+
+  .reverie-flow .react-flow__controls button {
+    background: #f0ebf8;
+    border-bottom: 1px solid rgba(13, 11, 30, 0.18);
+    color: #0d0b1e;
+    fill: #0d0b1e;
+  }
+
+  .reverie-flow .react-flow__controls button:hover {
+    background: #5de8d8;
+    color: #041f1a;
+    fill: #041f1a;
+  }
+
+  .reverie-flow .react-flow__minimap {
+    background: #f0ebf8;
+    border: 1px solid rgba(93, 232, 216, 0.45);
+    border-radius: 10px;
+  }
+
+  .reverie-flow .react-flow__attribution {
+    background: rgba(240, 235, 248, 0.9);
+    color: #0d0b1e;
+  }
+}

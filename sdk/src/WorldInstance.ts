@@ -2,9 +2,14 @@
  * @worldframe/sdk — WorldInstance
  */
 import {
+  formatEther,
   parseEther,
   keccak256,
   toBytes,
+  toFunctionSelector,
+  toEventSelector,
+  numberToHex,
+  type Log,
   type PublicClient,
   type WalletClient,
   type Account,
@@ -27,14 +32,105 @@ import { ZoneClimateAgent } from "./agents/ZoneClimateAgent.js";
 import { FactionMoraleAgent } from "./agents/FactionMoraleAgent.js";
 import { ConflictResolutionAgent } from "./agents/ConflictResolutionAgent.js";
 import { TriggerManager, type ExtendedTriggerConfig } from "./reactivity/TriggerManager.js";
+import type { CompiledWorldManifest } from "./manifest.js";
+import {
+  decodeWorldRuntimeLogs,
+  verifyReceiptSummary,
+  worldExplorerLinks,
+  decodeReactivitySubscriptionLogs,
+  type DecodedWorldRuntimeEvent,
+  type DecodedReactivitySubscriptionEvent,
+  type VerifiedTransaction,
+} from "./runtime-events.js";
 
 type EventCallback = (event: WorldEvent) => void;
+
+const REACTIVITY_PRECOMPILE_ADDRESS = "0x0000000000000000000000000000000000000100" as `0x${string}`;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as `0x${string}`;
+const REACTIVITY_PRECOMPILE_ABI = [
+  {
+    type: "function",
+    name: "subscribe",
+    stateMutability: "nonpayable",
+    inputs: [{
+      name: "subscriptionData",
+      type: "tuple",
+      components: [
+        { name: "eventTopics", type: "bytes32[4]" },
+        { name: "origin", type: "address" },
+        { name: "caller", type: "address" },
+        { name: "emitter", type: "address" },
+        { name: "handlerContractAddress", type: "address" },
+        { name: "handlerFunctionSelector", type: "bytes4" },
+        { name: "priorityFeePerGas", type: "uint64" },
+        { name: "maxFeePerGas", type: "uint64" },
+        { name: "gasLimit", type: "uint64" },
+        { name: "isGuaranteed", type: "bool" },
+        { name: "isCoalesced", type: "bool" },
+      ],
+    }],
+    outputs: [{ name: "subscriptionId", type: "uint256" }],
+  },
+] as const;
+
+type TriggerSubscriptionRecord = {
+  triggerId: `0x${string}`;
+  triggerType: "contract_event" | "scheduled";
+  txHash: `0x${string}`;
+  transaction: VerifiedTransaction;
+  events: DecodedWorldRuntimeEvent[];
+  reactivityEvents: DecodedReactivitySubscriptionEvent[];
+  emitter: `0x${string}`;
+  topic0: `0x${string}`;
+  topic1?: `0x${string}`;
+  gasLimit: string;
+  scheduleNextTimestampMs?: string;
+  scheduleIntervalSeconds?: string;
+  handlerContractAddress: `0x${string}`;
+};
+
+function manifestTriggersForContract(manifest: CompiledWorldManifest) {
+  return manifest.triggers.map((trigger) => ({
+    triggerId: trigger.triggerId,
+    active: trigger.active,
+    triggerType: trigger.triggerType,
+    emitter: trigger.emitter,
+    topic0: trigger.topic0,
+    topic1: trigger.topic1,
+    gasLimit: trigger.gasLimit,
+    cooldownSeconds: trigger.cooldownSeconds,
+    scheduleIntervalSeconds: trigger.scheduleIntervalSeconds,
+    scheduleNextTimestampMs: trigger.scheduleNextTimestampMs,
+    firstStep: trigger.firstStep,
+    stepCount: trigger.stepCount,
+  }));
+}
+
+function manifestZonesForContract(manifest: CompiledWorldManifest) {
+  return manifest.zones.map((zone) => ({
+    zoneId: zone.zoneId,
+    name: zone.name,
+    dangerLevel: zone.dangerLevel,
+    faction: zone.faction,
+  }));
+}
+
+function manifestFactionsForContract(manifest: CompiledWorldManifest) {
+  return manifest.factions.map((faction) => ({
+    factionId: faction.factionId,
+    name: faction.name,
+    morale: faction.morale,
+    narrative: faction.narrative,
+  }));
+}
 
 export class WorldInstance {
   private worldAddress: `0x${string}`;
   private publicClient: PublicClient;
   private walletClient: WalletClient<Transport, Chain, Account>;
-  private network: "testnet";
+  private account: Account | `0x${string}` | null;
+  readonly network: "testnet";
   private agentKit: SomniaAgentKit;
   private listeners: Map<WorldEventType | "all", EventCallback[]> = new Map();
   private unwatch: (() => void) | null = null;
@@ -52,16 +148,17 @@ export class WorldInstance {
     publicClient: PublicClient,
     walletClient: WalletClient<Transport, Chain, Account>,
     network: "testnet",
-    agentKit: SomniaAgentKit
+    agentKit: SomniaAgentKit,
+    account: Account | `0x${string}` | null = walletClient.account ?? null
   ) {
     this.worldAddress = worldAddress;
     this.publicClient = publicClient;
     this.walletClient = walletClient;
+    this.account = account;
     this.network = network;
     this.agentKit = agentKit;
     this.triggerManager = new TriggerManager(
       this,
-      publicClient,
       walletClient,
       agentKit
     );
@@ -83,9 +180,336 @@ export class WorldInstance {
 
   async fund(amountStt: string): Promise<`0x${string}`> {
     return this.walletClient.sendTransaction({
+      account: this.account ?? undefined,
       to: this.worldAddress,
       value: parseEther(amountStt),
     });
+  }
+
+  async waitForTransaction(txHash: `0x${string}`): Promise<void> {
+    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+  }
+
+  async verifyTransaction(txHash: `0x${string}`): Promise<{
+    transaction: VerifiedTransaction;
+    events: DecodedWorldRuntimeEvent[];
+    reactivityEvents: DecodedReactivitySubscriptionEvent[];
+  }> {
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    return {
+      transaction: verifyReceiptSummary(receipt),
+      events: decodeWorldRuntimeLogs(receipt.logs),
+      reactivityEvents: decodeReactivitySubscriptionLogs(receipt.logs),
+    };
+  }
+
+  async getBalance(): Promise<string> {
+    return formatEther(await this.publicClient.getBalance({ address: this.worldAddress }));
+  }
+
+  async getVerifiedBalance(): Promise<{ balanceWei: string; balanceStt: string }> {
+    const balance = await this.publicClient.getBalance({ address: this.worldAddress });
+    return { balanceWei: balance.toString(), balanceStt: formatEther(balance) };
+  }
+
+  getExplorerLinks(): { address: `0x${string}`; addressUrl: string } {
+    return worldExplorerLinks(this.worldAddress);
+  }
+
+  async fundAndVerify(amountStt: string): Promise<{
+    txHash: `0x${string}`;
+    transaction: VerifiedTransaction;
+    balanceWei: string;
+    balanceStt: string;
+  }> {
+    const txHash = await this.fund(amountStt);
+    const { transaction } = await this.verifyTransaction(txHash);
+    if (transaction.status !== "success") {
+      throw new Error(`World funding transaction failed: ${txHash}`);
+    }
+    const balance = await this.getVerifiedBalance();
+    return { txHash, transaction, ...balance };
+  }
+
+  async configureManifest(manifest: CompiledWorldManifest): Promise<`0x${string}`> {
+    if (manifest.unsupported.length > 0) {
+      throw new Error(`Manifest contains unsupported workflow steps: ${manifest.unsupported.join("; ")}`);
+    }
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "configureManifest",
+      args: [
+        manifest.manifestHash,
+        manifestZonesForContract(manifest),
+        manifestFactionsForContract(manifest),
+        manifestTriggersForContract(manifest),
+        manifest.steps,
+        manifest.decisionContinuations,
+      ] as never,
+    });
+  }
+
+  async armWorld(): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "armWorld",
+      args: [],
+    });
+  }
+
+  async pauseWorld(): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "pauseWorld",
+      args: [],
+    });
+  }
+
+  async stopWorld(reason = "Stopped by world owner."): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "stopWorld",
+      args: [reason],
+    });
+  }
+
+  async withdraw(): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "withdraw",
+      args: [],
+    });
+  }
+
+  async withdrawAndVerify(): Promise<{
+    txHash: `0x${string}`;
+    transaction: VerifiedTransaction;
+    balanceWei: string;
+    balanceStt: string;
+  }> {
+    const txHash = await this.withdraw();
+    const { transaction } = await this.verifyTransaction(txHash);
+    if (transaction.status !== "success") {
+      throw new Error(`World withdraw transaction failed: ${txHash}`);
+    }
+    const balance = await this.getVerifiedBalance();
+    return { txHash, transaction, ...balance };
+  }
+
+  async fireManualTrigger(params: {
+    triggerId: `0x${string}`;
+    context?: string;
+    value?: string;
+  }): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "fireManualTrigger",
+      args: [params.triggerId, params.context ?? "manual_trigger"],
+      value: params.value ? parseEther(params.value) : 0n,
+    });
+  }
+
+  async fireManualTriggerAndParse(params: {
+    triggerId: `0x${string}`;
+    context?: string;
+    value?: string;
+  }): Promise<{
+    txHash: `0x${string}`;
+    transaction: VerifiedTransaction;
+    events: DecodedWorldRuntimeEvent[];
+    requestIds: string[];
+  }> {
+    const txHash = await this.fireManualTrigger(params);
+    const verified = await this.verifyTransaction(txHash);
+    if (verified.transaction.status !== "success") {
+      throw new Error(`Manual trigger transaction failed: ${txHash}`);
+    }
+    const requestIds = [...new Set(verified.events.map((event) => event.requestId).filter((id): id is string => Boolean(id)))];
+    return { txHash, transaction: verified.transaction, events: verified.events, requestIds };
+  }
+
+  async subscribeTrigger(triggerId: `0x${string}`): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "subscribeTrigger",
+      args: [triggerId],
+    });
+  }
+
+  async scheduleTrigger(trigger: Pick<CompiledWorldManifest["triggers"][number], "triggerId" | "triggerType" | "scheduleNextTimestampMs" | "scheduleIntervalSeconds" | "gasLimit">): Promise<`0x${string}`> {
+    if (trigger.triggerType !== 2) {
+      throw new Error("scheduleTrigger can only schedule manifest scheduled triggers.");
+    }
+    const timestampMs = Number(trigger.scheduleNextTimestampMs);
+    if (!Number.isFinite(timestampMs) || timestampMs < Date.now() + 12_000) {
+      throw new Error("Scheduled trigger timestamp must be at least 12 seconds in the future.");
+    }
+    const fees = await this.publicClient.estimateFeesPerGas().catch(() => null);
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: REACTIVITY_PRECOMPILE_ADDRESS,
+      abi: REACTIVITY_PRECOMPILE_ABI,
+      functionName: "subscribe",
+      args: [{
+        eventTopics: [
+          toEventSelector({
+            name: "Schedule",
+            type: "event",
+            inputs: [{ name: "timestampMillis", type: "uint256", indexed: true }],
+          }),
+          numberToHex(BigInt(timestampMs), { size: 32 }),
+          ZERO_BYTES32,
+          ZERO_BYTES32,
+        ],
+        origin: ZERO_ADDRESS,
+        caller: ZERO_ADDRESS,
+        emitter: ZERO_ADDRESS,
+        handlerContractAddress: this.worldAddress,
+        handlerFunctionSelector: toFunctionSelector({
+        name: "onEvent",
+        type: "function",
+        stateMutability: "nonpayable",
+        inputs: [
+          { name: "emitter", type: "address" },
+          { name: "eventTopics", type: "bytes32[]" },
+          { name: "data", type: "bytes" },
+        ],
+        outputs: [],
+        }),
+        priorityFeePerGas: fees?.maxPriorityFeePerGas ?? 1n,
+        maxFeePerGas: fees?.maxFeePerGas ?? 1n,
+        gasLimit: trigger.gasLimit > 0n ? trigger.gasLimit : 500_000n,
+        isGuaranteed: true,
+        isCoalesced: false,
+      }],
+    });
+  }
+
+  async unsubscribeTrigger(triggerId: `0x${string}`): Promise<`0x${string}`> {
+    return this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "unsubscribeTrigger",
+      args: [triggerId],
+    });
+  }
+
+  async subscribeManifestTriggers(manifest: CompiledWorldManifest): Promise<{
+    txHashes: `0x${string}`[];
+    transactions: VerifiedTransaction[];
+    events: DecodedWorldRuntimeEvent[];
+    reactivityEvents: DecodedReactivitySubscriptionEvent[];
+    subscriptions: TriggerSubscriptionRecord[];
+  }> {
+    const txHashes: `0x${string}`[] = [];
+    const transactions: VerifiedTransaction[] = [];
+    const events: DecodedWorldRuntimeEvent[] = [];
+    const reactivityEvents: DecodedReactivitySubscriptionEvent[] = [];
+    const subscriptions: TriggerSubscriptionRecord[] = [];
+    for (const trigger of manifest.triggers) {
+      if (
+        (trigger.triggerType !== 1 && trigger.triggerType !== 2) ||
+        (trigger.triggerType !== 2 && trigger.emitter === "0x0000000000000000000000000000000000000000") ||
+        trigger.topic0 === `0x${"0".repeat(64)}`
+      ) {
+        continue;
+      }
+      const txHash = trigger.triggerType === 2
+        ? await this.scheduleTrigger(trigger)
+        : await this.subscribeTrigger(trigger.triggerId);
+      const verified = await this.verifyTransaction(txHash);
+      if (verified.transaction.status !== "success") {
+        throw new Error(`Trigger subscription failed: ${txHash}`);
+      }
+      txHashes.push(txHash);
+      transactions.push(verified.transaction);
+      events.push(...verified.events);
+      reactivityEvents.push(...verified.reactivityEvents);
+      subscriptions.push({
+        triggerId: trigger.triggerId,
+        triggerType: trigger.triggerType === 2 ? "scheduled" : "contract_event",
+        txHash,
+        transaction: verified.transaction,
+        events: verified.events,
+        reactivityEvents: verified.reactivityEvents,
+        emitter: trigger.emitter,
+        topic0: trigger.topic0,
+        topic1: trigger.topic1,
+        gasLimit: trigger.gasLimit.toString(),
+        scheduleNextTimestampMs: trigger.scheduleNextTimestampMs > 0n ? trigger.scheduleNextTimestampMs.toString() : undefined,
+        scheduleIntervalSeconds: trigger.scheduleIntervalSeconds > 0n ? trigger.scheduleIntervalSeconds.toString() : undefined,
+        handlerContractAddress: this.worldAddress,
+      });
+    }
+    return { txHashes, transactions, events, reactivityEvents, subscriptions };
+  }
+
+  async getLiveState(): Promise<{
+    address: `0x${string}`;
+    balanceStt: string;
+    manifestHash: `0x${string}`;
+    lifecycleStatus: number;
+    counts: { zoneCount: bigint; factionCount: bigint; triggerCount: bigint; stepCount: bigint };
+  }> {
+    const [balance, manifestHash, lifecycleStatus, counts] = await Promise.all([
+      this.getBalance(),
+      this.publicClient.readContract({
+        address: this.worldAddress,
+        abi: WORLD_INSTANCE_ABI,
+        functionName: "manifestHash",
+      }) as Promise<`0x${string}`>,
+      this.publicClient.readContract({
+        address: this.worldAddress,
+        abi: WORLD_INSTANCE_ABI,
+        functionName: "lifecycleStatus",
+      }) as Promise<number>,
+      this.publicClient.readContract({
+        address: this.worldAddress,
+        abi: WORLD_INSTANCE_ABI,
+        functionName: "getManifestCounts",
+      }) as Promise<[bigint, bigint, bigint, bigint]>,
+    ]);
+    return {
+      address: this.worldAddress,
+      balanceStt: balance,
+      manifestHash,
+      lifecycleStatus: Number(lifecycleStatus),
+      counts: {
+        zoneCount: counts[0],
+        factionCount: counts[1],
+        triggerCount: counts[2],
+        stepCount: counts[3],
+      },
+    };
+  }
+
+  async getWorkflowEvents(params: {
+    fromBlock?: bigint | number | string;
+    toBlock?: bigint | number | string | "latest";
+  } = {}): Promise<DecodedWorldRuntimeEvent[]> {
+    const fromBlock = params.fromBlock === undefined ? undefined : BigInt(params.fromBlock);
+    const toBlock = params.toBlock === undefined || params.toBlock === "latest" ? undefined : BigInt(params.toBlock);
+    const logs = await this.publicClient.getLogs({
+      address: this.worldAddress,
+      fromBlock,
+      toBlock,
+    }) as Log[];
+    return decodeWorldRuntimeLogs(logs);
   }
 
   async setZone(params: {
@@ -95,6 +519,7 @@ export class WorldInstance {
     faction: string;
   }): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "setZone",
@@ -118,48 +543,54 @@ export class WorldInstance {
     return { id: zoneId, name, dangerLevel, controllingFaction, climateState };
   }
 
-  async installModule(params: {
-    moduleId: `0x${string}`;
-    moduleAddress: `0x${string}`;
-  }): Promise<`0x${string}`> {
-    return this.walletClient.writeContract({
+  async getFactionMorale(factionId: string): Promise<{
+    factionId: string;
+    moraleDelta: bigint;
+    narrative: string;
+    updatedAt: bigint;
+  }> {
+    const result = await this.publicClient.readContract({
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
-      functionName: "installModule",
-      args: [params.moduleId, params.moduleAddress],
+      functionName: "factionMorale",
+      args: [factionId],
     });
+    const [moraleDelta, narrative, updatedAt] = result as [bigint, string, bigint];
+    return { factionId, moraleDelta, narrative, updatedAt };
   }
 
-  async removeModule(moduleId: `0x${string}`): Promise<`0x${string}`> {
-    return this.walletClient.writeContract({
-      address: this.worldAddress,
-      abi: WORLD_INSTANCE_ABI,
-      functionName: "removeModule",
-      args: [moduleId],
-    });
-  }
-
-  async getModule(moduleId: `0x${string}`): Promise<`0x${string}`> {
-    return (await this.publicClient.readContract({
-      address: this.worldAddress,
-      abi: WORLD_INSTANCE_ABI,
-      functionName: "getModule",
-      args: [moduleId],
-    })) as `0x${string}`;
-  }
-
-  async executeModule(params: {
-    moduleId: `0x${string}`;
-    data: `0x${string}`;
-    value?: string;
-  }): Promise<`0x${string}`> {
-    return this.walletClient.writeContract({
-      address: this.worldAddress,
-      abi: WORLD_INSTANCE_ABI,
-      functionName: "executeModule",
-      args: [params.moduleId, params.data],
-      value: params.value ? parseEther(params.value) : 0n,
-    });
+  async hydrateManifestState(manifest: CompiledWorldManifest): Promise<{
+    zones: Array<Zone & { slug?: string; allocationWeightBps?: bigint }>;
+    factions: Array<{
+      factionId: string;
+      name: string;
+      moraleDelta: bigint;
+      narrative: string;
+      updatedAt: bigint;
+      allocationWeightBps?: bigint;
+    }>;
+  }> {
+    const zoneWeights = new Map(
+      manifest.relationships
+        .filter((relationship) => relationship.sourceType === "zone" && relationship.targetType === "world")
+        .map((relationship) => [relationship.sourceId, relationship.weightBps])
+    );
+    const factionWeights = new Map(
+      manifest.relationships
+        .filter((relationship) => relationship.sourceType === "faction" && relationship.targetType === "world")
+        .map((relationship) => [relationship.sourceId, relationship.weightBps])
+    );
+    const [zones, factions] = await Promise.all([
+      Promise.all(manifest.zones.map(async (zone) => {
+        const live = await this.getZone(zone.zoneId);
+        return { ...live, slug: zone.sourceId, allocationWeightBps: zoneWeights.get(zone.sourceId) };
+      })),
+      Promise.all(manifest.factions.map(async (faction) => {
+        const live = await this.getFactionMorale(faction.factionId);
+        return { ...live, name: faction.name, allocationWeightBps: factionWeights.get(faction.sourceId) };
+      })),
+    ]);
+    return { zones, factions };
   }
 
   async upgradeToAndCall(params: {
@@ -168,6 +599,7 @@ export class WorldInstance {
     value?: string;
   }): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "upgradeToAndCall",
@@ -185,6 +617,7 @@ export class WorldInstance {
     value?: string;
   }): Promise<{ requestId: bigint; txHash: `0x${string}` }> {
     const hash = await this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "requestAgentDecision",
@@ -202,6 +635,55 @@ export class WorldInstance {
     return { requestId, txHash: hash };
   }
 
+  async requestLlmToolsChat(params: {
+    triggerId: `0x${string}`;
+    roles: string[];
+    messages: string[];
+    mcpServerUrls: string[];
+    cooldownSeconds?: number;
+    value?: string;
+  }): Promise<{ requestId: bigint; txHash: `0x${string}` }> {
+    const hash = await this.walletClient.writeContract({
+      account: this.account ?? undefined,
+      address: this.worldAddress,
+      abi: WORLD_INSTANCE_ABI,
+      functionName: "requestLlmToolsChat",
+      args: [
+        params.triggerId,
+        params.roles,
+        params.messages,
+        params.mcpServerUrls,
+        BigInt(params.cooldownSeconds ?? 0),
+      ],
+      value: params.value ? parseEther(params.value) : 0n,
+    });
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+    const requestId = extractWorldRequestIdFromLogs(receipt.logs);
+    return { requestId, txHash: hash };
+  }
+
+  async requestLlmToolsChatAndParse(params: {
+    triggerId: `0x${string}`;
+    roles: string[];
+    messages: string[];
+    mcpServerUrls: string[];
+    cooldownSeconds?: number;
+    value?: string;
+  }): Promise<{
+    txHash: `0x${string}`;
+    transaction: VerifiedTransaction;
+    events: DecodedWorldRuntimeEvent[];
+    requestIds: string[];
+  }> {
+    const { txHash, requestId } = await this.requestLlmToolsChat(params);
+    const verified = await this.verifyTransaction(txHash);
+    const requestIds = [...new Set([
+      requestId ? requestId.toString() : "",
+      ...verified.events.map((event) => event.requestId).filter((id): id is string => Boolean(id)),
+    ].filter(Boolean))];
+    return { txHash, transaction: verified.transaction, events: verified.events, requestIds };
+  }
+
   async requestChronicleOnChain(params: {
     triggerId: `0x${string}`;
     rawEvent: string;
@@ -210,6 +692,7 @@ export class WorldInstance {
     value?: string;
   }): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "chronicleFromAgent",
@@ -225,6 +708,7 @@ export class WorldInstance {
 
   async recordChronicleEntry(description: string): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "recordChronicleEntry",
@@ -237,6 +721,7 @@ export class WorldInstance {
     climateState: string
   ): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "applyClimateResult",
@@ -249,6 +734,7 @@ export class WorldInstance {
     outcome: string
   ): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "applyConflictOutcome",
@@ -262,6 +748,7 @@ export class WorldInstance {
     narrative: string
   ): Promise<`0x${string}`> {
     return this.walletClient.writeContract({
+      account: this.account ?? undefined,
       address: this.worldAddress,
       abi: WORLD_INSTANCE_ABI,
       functionName: "updateFactionMorale",
@@ -329,6 +816,10 @@ export class WorldInstance {
     this._addListener(type, callback);
     this._ensureWatching();
     return () => this._removeListener(type, callback);
+  }
+
+  watchRuntimeEvents(callback: (event: WorldEvent) => void): () => void {
+    return this.onEvent(callback);
   }
 
   private _addListener(key: WorldEventType | "all", cb: EventCallback) {

@@ -57,15 +57,25 @@ export function factionMoraleUserPrompt(
   price: string,
   change: string,
   factionId: string,
-  style: WorldStyle
+  style: WorldStyle,
+  context?: {
+    currentMorale?: string | number;
+    recentActions?: string;
+    economyState?: string;
+    objective?: string;
+  }
 ): string {
   return [
     `Pair: ${pair}`,
     `USD price (consensus-verified): ${price}`,
     `24h change %: ${change}`,
     `Faction: ${factionId}`,
+    context?.currentMorale !== undefined ? `Current morale: ${context.currentMorale}` : "",
+    context?.recentActions ? `Recent faction actions: ${context.recentActions}` : "",
+    context?.economyState ? `Current economy/world state: ${context.economyState}` : "",
+    context?.objective ? `Faction objective: ${context.objective}` : "",
     `Style: ${style}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function conflictUserPrompt(

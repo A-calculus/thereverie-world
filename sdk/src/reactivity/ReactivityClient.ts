@@ -4,7 +4,7 @@
  */
 import type { PublicClient, WalletClient, Account, Transport, Chain } from "viem";
 import type { NetworkId } from "../types.js";
-import { somniaTestnet } from "../constants.js";
+import { createSdkPublicClient } from "../transports.js";
 
 export interface ReactivitySubscribeParams {
   network: NetworkId;
@@ -23,16 +23,9 @@ export async function subscribeReactivityEvents(
   if ((params as { network: string }).network !== "testnet") {
     throw new Error("[WorldFrame SDK] Reactivity is only supported on Somnia testnet.");
   }
-  const chain = somniaTestnet;
-
   const publicClient =
     params.publicClient ??
-    (await import("viem")).createPublicClient({
-      chain,
-      transport: (await import("viem")).webSocket(
-        chain.rpcUrls.default.webSocket?.[0] ?? chain.rpcUrls.default.http[0]
-      ),
-    });
+    createSdkPublicClient();
 
   const sdk = new SDK({
     public: publicClient,

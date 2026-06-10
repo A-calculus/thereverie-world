@@ -1,0 +1,1052 @@
+{
+  "uiSlug": "living-kingdom-lite",
+  "displayName": "Living Kingdom Lite",
+  "description": "A fantasy world template where weather, market-like pressure, and player actions update territories, faction morale, conflicts, and Chronicle history.",
+  "version": "living-kingdom-lite-v1",
+  "engine": "genericEventWorld",
+  "publicTypes": {
+    "KingdomClimate": [
+      "CALM",
+      "STORMY",
+      "PROSPEROUS",
+      "TENSE",
+      "WAR"
+    ],
+    "inputs": [
+      "focusZoneId",
+      "playerAction",
+      "weatherCity"
+    ]
+  },
+  "inputSchema": [
+    {
+      "id": "focusZoneId",
+      "label": "Focus zone",
+      "type": "select",
+      "required": true,
+      "defaultValue": "northern-reaches",
+      "options": [
+        {
+          "label": "Northern Reaches",
+          "value": "northern-reaches"
+        },
+        {
+          "label": "Merchant Quarter",
+          "value": "merchant-quarter"
+        },
+        {
+          "label": "Ancient Forest",
+          "value": "ancient-forest"
+        },
+        {
+          "label": "Disputed Borderlands",
+          "value": "disputed-borderlands"
+        },
+        {
+          "label": "Neutral City",
+          "value": "neutral-city"
+        }
+      ]
+    },
+    {
+      "id": "weatherCity",
+      "label": "Weather city",
+      "type": "text",
+      "required": true,
+      "defaultValue": "London"
+    },
+    {
+      "id": "playerAction",
+      "label": "Player action",
+      "type": "text",
+      "required": true,
+      "defaultValue": "Fortify the Northern Reaches before the storm reaches the mountain pass."
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "londonWeather",
+      "name": "London Weather JSON",
+      "type": "weather",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=51.5072&longitude=-0.1276&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "method": "GET"
+    },
+    {
+      "id": "marketMood",
+      "name": "Market Mood JSON",
+      "type": "json",
+      "url": "https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT",
+      "method": "GET"
+    }
+  ],
+  "agentChain": [
+    {
+      "id": "world-feed-reader",
+      "name": "World Feed Reader",
+      "agentType": "native_json_api",
+      "purpose": "Read weather and market-flavored data for the fantasy world tick.",
+      "inputTemplate": "Inspect world feed for {{runtime.inputs.focusZoneId}} from {{source.value}}.",
+      "persistResult": false
+    },
+    {
+      "id": "kingdom-event-synthesizer",
+      "name": "Kingdom Event Synthesizer",
+      "agentType": "native_llm",
+      "purpose": "Turn real-world signals or player input into a fantasy event JSON.",
+      "inputTemplate": "Create a kingdom event for {{runtime.inputs.focusZoneId}} using {{runtime.inputs.playerAction}} and {{previous.output}}.",
+      "persistResult": false
+    },
+    {
+      "id": "territory-climate",
+      "name": "Territory Climate Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Update territory climate and pressure state.",
+      "inputTemplate": "Update territory state for {{runtime.inputs.focusZoneId}} from {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "faction-morale",
+      "name": "Faction Morale Agent",
+      "agentType": "native_llm",
+      "purpose": "Recalculate faction morale from the latest event.",
+      "inputTemplate": "Update faction morale for Ironforge, Trade Alliance, Verdant Circle, and Order of Dawn from {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "border-conflict",
+      "name": "Border Conflict Resolver",
+      "agentType": "reverie_custom",
+      "purpose": "Resolve control or alliance changes when factions clash.",
+      "inputTemplate": "Resolve any border conflict or alliance implication from {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "kingdom-chronicle",
+      "name": "Kingdom Chronicle Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Write a verifiable fantasy history entry.",
+      "inputTemplate": "Write an epic but concise Chronicle entry for {{previous.output}}.",
+      "persistResult": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "northern-reaches",
+      "name": "The Northern Reaches",
+      "description": "Weather-driven mountain region.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 20,
+        "controllingFaction": "ironforge-clan",
+        "climate": "CALM"
+      },
+      "allocationPercent": 20
+    },
+    {
+      "id": "merchant-quarter",
+      "name": "The Merchant Quarter",
+      "description": "Trade hub affected by market pressure.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 20,
+        "controllingFaction": "trade-alliance",
+        "climate": "CALM"
+      },
+      "allocationPercent": 20
+    },
+    {
+      "id": "ancient-forest",
+      "name": "The Ancient Forest",
+      "description": "Mystical zone affected by volatility and balance.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 20,
+        "controllingFaction": "verdant-circle",
+        "climate": "CALM"
+      },
+      "allocationPercent": 20
+    },
+    {
+      "id": "disputed-borderlands",
+      "name": "The Disputed Borderlands",
+      "description": "Territory controlled by conflict outcomes.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 20,
+        "controllingFaction": "order-of-dawn",
+        "climate": "TENSE"
+      },
+      "allocationPercent": 20
+    },
+    {
+      "id": "neutral-city",
+      "name": "The Neutral City",
+      "description": "Manual actions, alliances, and proposals.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 20,
+        "controllingFaction": "ironforge-clan",
+        "climate": "CALM"
+      },
+      "allocationPercent": 20
+    }
+  ],
+  "factions": [
+    {
+      "id": "ironforge-clan",
+      "name": "Ironforge Clan",
+      "description": "Warriors strengthened by harsh weather.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Ironforge Clan is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "trade-alliance",
+      "name": "Trade Alliance",
+      "description": "Merchants driven by market conditions.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Trade Alliance is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "verdant-circle",
+      "name": "Verdant Circle",
+      "description": "Mystics affected by volatility and balance.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Verdant Circle is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "order-of-dawn",
+      "name": "Order of Dawn",
+      "description": "Paladins strengthened by heroic Chronicle sentiment.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Order of Dawn is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "triggers": [
+    {
+      "id": "start-kingdom-runtime",
+      "name": "Start Kingdom Runtime",
+      "type": "data_condition",
+      "sourceId": "londonWeather",
+      "condition": {
+        "isStartTrigger": true
+      },
+      "sourceConfig": {
+        "kind": "builder_input",
+        "sourceId": "focusZoneId",
+        "path": ""
+      },
+      "typeConfig": {
+        "conditionEnabled": false,
+        "operator": "exists",
+        "compareValue": ""
+      },
+      "inputParser": "{\n  \"focusZoneId\": \"{{runtime.inputs.focusZoneId}}\",\n  \"weatherCity\": \"{{runtime.inputs.weatherCity}}\",\n  \"playerAction\": \"{{runtime.inputs.playerAction}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Kingdom event log",
+          "path": "eventLog",
+          "valueTemplate": "Start Kingdom Runtime completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "northern-reaches",
+          "path": "latestDecision",
+          "valueTemplate": "Start Kingdom Runtime updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "ironforge-clan",
+          "path": "latestDecision",
+          "valueTemplate": "Start Kingdom Runtime updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "kingdomLatestTurn",
+          "valueTemplate": "Start Kingdom Runtime completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "world-feed-reader",
+        "kingdom-event-synthesizer",
+        "territory-climate",
+        "faction-morale",
+        "border-conflict",
+        "kingdom-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "manual-player-action",
+      "name": "Manual Player Action",
+      "type": "manual_action",
+      "sourceId": "londonWeather",
+      "sourceConfig": {
+        "kind": "manual_payload",
+        "path": ""
+      },
+      "typeConfig": {
+        "buttonLabel": "Run Player Action",
+        "description": "Apply a manual player action to the kingdom.",
+        "payloadTemplate": "{\n  \"action\": \"{{runtime.inputs.playerAction}}\",\n  \"zone\": \"{{runtime.inputs.focusZoneId}}\"\n}"
+      },
+      "inputParser": "{\n  \"action\": \"{{runtime.inputs.playerAction}}\",\n  \"payload\": \"{{trigger.payload}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Kingdom event log",
+          "path": "eventLog",
+          "valueTemplate": "Manual Player Action completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "merchant-quarter",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Player Action updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "order-of-dawn",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Player Action updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "kingdomLatestTurn",
+          "valueTemplate": "Manual Player Action completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "kingdom-event-synthesizer",
+        "territory-climate",
+        "faction-morale",
+        "border-conflict",
+        "kingdom-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "scheduled-kingdom-tick",
+      "name": "Scheduled Kingdom Tick",
+      "type": "scheduled",
+      "sourceId": "londonWeather",
+      "sourceConfig": {
+        "kind": "data_source",
+        "sourceId": "londonWeather",
+        "path": "body.current"
+      },
+      "typeConfig": {
+        "cronExpression": "0 * * * *",
+        "timezone": "UTC"
+      },
+      "inputParser": "{\n  \"focusZoneId\": \"{{runtime.inputs.focusZoneId}}\",\n  \"weather\": \"{{source.value}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Kingdom event log",
+          "path": "eventLog",
+          "valueTemplate": "Scheduled Kingdom Tick completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "ancient-forest",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Kingdom Tick updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "verdant-circle",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Kingdom Tick updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "kingdomLatestTurn",
+          "valueTemplate": "Scheduled Kingdom Tick completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "world-feed-reader",
+        "kingdom-event-synthesizer",
+        "territory-climate",
+        "faction-morale",
+        "kingdom-chronicle"
+      ],
+      "isActive": true
+    }
+  ],
+  "manualActions": [
+    {
+      "id": "run-player-action",
+      "label": "Run Player Action",
+      "description": "Run the configured player action.",
+      "triggerId": "manual-player-action",
+      "ownerOnly": true
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "input:focusZoneId",
+        "type": "input",
+        "label": "Focus zone",
+        "refId": "focusZoneId",
+        "position": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "input:weatherCity",
+        "type": "input",
+        "label": "Weather city",
+        "refId": "weatherCity",
+        "position": {
+          "x": 0,
+          "y": 90
+        }
+      },
+      {
+        "id": "input:playerAction",
+        "type": "input",
+        "label": "Player action",
+        "refId": "playerAction",
+        "position": {
+          "x": 0,
+          "y": 180
+        }
+      },
+      {
+        "id": "data:londonWeather",
+        "type": "dataSource",
+        "label": "London Weather JSON",
+        "refId": "londonWeather",
+        "position": {
+          "x": 220,
+          "y": 0
+        }
+      },
+      {
+        "id": "data:marketMood",
+        "type": "dataSource",
+        "label": "Market Mood JSON",
+        "refId": "marketMood",
+        "position": {
+          "x": 220,
+          "y": 90
+        }
+      },
+      {
+        "id": "trigger:start-kingdom-runtime",
+        "type": "trigger",
+        "label": "Start Kingdom Runtime",
+        "refId": "start-kingdom-runtime",
+        "position": {
+          "x": 440,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:world-feed-reader",
+        "type": "agent",
+        "label": "World Feed Reader",
+        "refId": "world-feed-reader",
+        "position": {
+          "x": 660,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:kingdom-event-synthesizer",
+        "type": "agent",
+        "label": "Kingdom Event Synthesizer",
+        "refId": "kingdom-event-synthesizer",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:territory-climate",
+        "type": "agent",
+        "label": "Territory Climate Agent",
+        "refId": "territory-climate",
+        "position": {
+          "x": 1020,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:faction-morale",
+        "type": "agent",
+        "label": "Faction Morale Agent",
+        "refId": "faction-morale",
+        "position": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:border-conflict",
+        "type": "agent",
+        "label": "Border Conflict Resolver",
+        "refId": "border-conflict",
+        "position": {
+          "x": 1380,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:kingdom-chronicle",
+        "type": "agent",
+        "label": "Kingdom Chronicle Agent",
+        "refId": "kingdom-chronicle",
+        "position": {
+          "x": 1560,
+          "y": 0
+        }
+      },
+      {
+        "id": "event:start-kingdom-runtime:0",
+        "type": "event",
+        "label": "Kingdom event log",
+        "refId": "Kingdom event log",
+        "position": {
+          "x": 1320,
+          "y": 0
+        }
+      },
+      {
+        "id": "zone:northern-reaches",
+        "type": "zone",
+        "label": "The Northern Reaches",
+        "refId": "northern-reaches",
+        "position": {
+          "x": 1320,
+          "y": 42
+        }
+      },
+      {
+        "id": "faction:ironforge-clan",
+        "type": "faction",
+        "label": "Ironforge Clan",
+        "refId": "ironforge-clan",
+        "position": {
+          "x": 1320,
+          "y": 84
+        }
+      },
+      {
+        "id": "world_state:kingdomLatestTurn",
+        "type": "event",
+        "label": "kingdomLatestTurn",
+        "refId": "kingdomLatestTurn",
+        "position": {
+          "x": 1320,
+          "y": 126
+        }
+      },
+      {
+        "id": "trigger:manual-player-action",
+        "type": "trigger",
+        "label": "Manual Player Action",
+        "refId": "manual-player-action",
+        "position": {
+          "x": 440,
+          "y": 120
+        }
+      },
+      {
+        "id": "event:manual-player-action:0",
+        "type": "event",
+        "label": "Kingdom event log",
+        "refId": "Kingdom event log",
+        "position": {
+          "x": 1320,
+          "y": 120
+        }
+      },
+      {
+        "id": "zone:merchant-quarter",
+        "type": "zone",
+        "label": "The Merchant Quarter",
+        "refId": "merchant-quarter",
+        "position": {
+          "x": 1320,
+          "y": 162
+        }
+      },
+      {
+        "id": "faction:order-of-dawn",
+        "type": "faction",
+        "label": "Order of Dawn",
+        "refId": "order-of-dawn",
+        "position": {
+          "x": 1320,
+          "y": 204
+        }
+      },
+      {
+        "id": "trigger:scheduled-kingdom-tick",
+        "type": "trigger",
+        "label": "Scheduled Kingdom Tick",
+        "refId": "scheduled-kingdom-tick",
+        "position": {
+          "x": 440,
+          "y": 240
+        }
+      },
+      {
+        "id": "event:scheduled-kingdom-tick:0",
+        "type": "event",
+        "label": "Kingdom event log",
+        "refId": "Kingdom event log",
+        "position": {
+          "x": 1320,
+          "y": 240
+        }
+      },
+      {
+        "id": "zone:ancient-forest",
+        "type": "zone",
+        "label": "The Ancient Forest",
+        "refId": "ancient-forest",
+        "position": {
+          "x": 1320,
+          "y": 282
+        }
+      },
+      {
+        "id": "faction:verdant-circle",
+        "type": "faction",
+        "label": "Verdant Circle",
+        "refId": "verdant-circle",
+        "position": {
+          "x": 1320,
+          "y": 324
+        }
+      },
+      {
+        "id": "zone:disputed-borderlands",
+        "type": "zone",
+        "label": "The Disputed Borderlands",
+        "refId": "disputed-borderlands",
+        "position": {
+          "x": 1320,
+          "y": 600
+        }
+      },
+      {
+        "id": "zone:neutral-city",
+        "type": "zone",
+        "label": "The Neutral City",
+        "refId": "neutral-city",
+        "position": {
+          "x": 1320,
+          "y": 680
+        }
+      },
+      {
+        "id": "faction:trade-alliance",
+        "type": "faction",
+        "label": "Trade Alliance",
+        "refId": "trade-alliance",
+        "position": {
+          "x": 1540,
+          "y": 440
+        }
+      },
+      {
+        "id": "world_state:aggregate",
+        "type": "event",
+        "label": "World state",
+        "refId": "world",
+        "position": {
+          "x": 1760,
+          "y": 420
+        }
+      },
+      {
+        "id": "action:run-player-action",
+        "type": "manualAction",
+        "label": "Run Player Action",
+        "refId": "run-player-action",
+        "position": {
+          "x": 220,
+          "y": 420
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge:londonWeather:start-kingdom-runtime",
+        "source": "data:londonWeather",
+        "target": "trigger:start-kingdom-runtime",
+        "label": "data_condition",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:step:0",
+        "source": "trigger:start-kingdom-runtime",
+        "target": "agent:world-feed-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:step:1",
+        "source": "agent:world-feed-reader",
+        "target": "agent:kingdom-event-synthesizer",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:step:2",
+        "source": "agent:kingdom-event-synthesizer",
+        "target": "agent:territory-climate",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:step:3",
+        "source": "agent:territory-climate",
+        "target": "agent:faction-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:step:4",
+        "source": "agent:faction-morale",
+        "target": "agent:border-conflict",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:step:5",
+        "source": "agent:border-conflict",
+        "target": "agent:kingdom-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-kingdom-runtime:output:0",
+        "source": "agent:kingdom-chronicle",
+        "target": "event:start-kingdom-runtime:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:start-kingdom-runtime:output:1",
+        "source": "agent:kingdom-chronicle",
+        "target": "zone:northern-reaches",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-kingdom-runtime:output:2",
+        "source": "agent:kingdom-chronicle",
+        "target": "faction:ironforge-clan",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-kingdom-runtime:output:3",
+        "source": "agent:kingdom-chronicle",
+        "target": "world_state:kingdomLatestTurn",
+        "label": "kingdomLatestTurn",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:londonWeather:manual-player-action",
+        "source": "data:londonWeather",
+        "target": "trigger:manual-player-action",
+        "label": "manual_action",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-player-action:step:0",
+        "source": "trigger:manual-player-action",
+        "target": "agent:kingdom-event-synthesizer",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-player-action:step:1",
+        "source": "agent:kingdom-event-synthesizer",
+        "target": "agent:territory-climate",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-player-action:step:2",
+        "source": "agent:territory-climate",
+        "target": "agent:faction-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-player-action:step:3",
+        "source": "agent:faction-morale",
+        "target": "agent:border-conflict",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-player-action:step:4",
+        "source": "agent:border-conflict",
+        "target": "agent:kingdom-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-player-action:output:0",
+        "source": "agent:kingdom-chronicle",
+        "target": "event:manual-player-action:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:manual-player-action:output:1",
+        "source": "agent:kingdom-chronicle",
+        "target": "zone:merchant-quarter",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-player-action:output:2",
+        "source": "agent:kingdom-chronicle",
+        "target": "faction:order-of-dawn",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-player-action:output:3",
+        "source": "agent:kingdom-chronicle",
+        "target": "world_state:kingdomLatestTurn",
+        "label": "kingdomLatestTurn",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:londonWeather:scheduled-kingdom-tick",
+        "source": "data:londonWeather",
+        "target": "trigger:scheduled-kingdom-tick",
+        "label": "scheduled",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:step:0",
+        "source": "trigger:scheduled-kingdom-tick",
+        "target": "agent:world-feed-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:step:1",
+        "source": "agent:world-feed-reader",
+        "target": "agent:kingdom-event-synthesizer",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:step:2",
+        "source": "agent:kingdom-event-synthesizer",
+        "target": "agent:territory-climate",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:step:3",
+        "source": "agent:territory-climate",
+        "target": "agent:faction-morale",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:step:4",
+        "source": "agent:faction-morale",
+        "target": "agent:kingdom-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:output:0",
+        "source": "agent:kingdom-chronicle",
+        "target": "event:scheduled-kingdom-tick:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:output:1",
+        "source": "agent:kingdom-chronicle",
+        "target": "zone:ancient-forest",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:output:2",
+        "source": "agent:kingdom-chronicle",
+        "target": "faction:verdant-circle",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-kingdom-tick:output:3",
+        "source": "agent:kingdom-chronicle",
+        "target": "world_state:kingdomLatestTurn",
+        "label": "kingdomLatestTurn",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:zone:northern-reaches:faction:ironforge-clan",
+        "source": "zone:northern-reaches",
+        "target": "faction:ironforge-clan",
+        "label": "influences",
+        "weightPercent": 20
+      },
+      {
+        "id": "edge:zone:merchant-quarter:faction:trade-alliance",
+        "source": "zone:merchant-quarter",
+        "target": "faction:trade-alliance",
+        "label": "influences",
+        "weightPercent": 20
+      },
+      {
+        "id": "edge:zone:ancient-forest:faction:verdant-circle",
+        "source": "zone:ancient-forest",
+        "target": "faction:verdant-circle",
+        "label": "influences",
+        "weightPercent": 20
+      },
+      {
+        "id": "edge:zone:disputed-borderlands:faction:order-of-dawn",
+        "source": "zone:disputed-borderlands",
+        "target": "faction:order-of-dawn",
+        "label": "influences",
+        "weightPercent": 20
+      },
+      {
+        "id": "edge:zone:neutral-city:faction:ironforge-clan",
+        "source": "zone:neutral-city",
+        "target": "faction:ironforge-clan",
+        "label": "influences",
+        "weightPercent": 20
+      },
+      {
+        "id": "edge:faction:ironforge-clan:world",
+        "source": "faction:ironforge-clan",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:trade-alliance:world",
+        "source": "faction:trade-alliance",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:verdant-circle:world",
+        "source": "faction:verdant-circle",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:order-of-dawn:world",
+        "source": "faction:order-of-dawn",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:action:run-player-action:manual-player-action",
+        "source": "action:run-player-action",
+        "target": "trigger:manual-player-action",
+        "label": "manual start",
+        "weightPercent": 100
+      }
+    ]
+  },
+  "runtimeLayout": [
+    {
+      "id": "kingdom-summary",
+      "title": "Kingdom Summary",
+      "kind": "summary",
+      "source": "latestRun.summary"
+    },
+    {
+      "id": "world-graph",
+      "title": "World Graph",
+      "kind": "graph",
+      "source": "graph"
+    },
+    {
+      "id": "agent-responses",
+      "title": "Agent Responses",
+      "kind": "agent_response",
+      "source": "latestRun.agentResponses"
+    },
+    {
+      "id": "event-log",
+      "title": "Live Events",
+      "kind": "event_log",
+      "source": "events"
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts",
+      "kind": "receipt_list",
+      "source": "latestRun.receipts"
+    },
+    {
+      "id": "manual-actions",
+      "title": "Manual Actions",
+      "kind": "manual_actions",
+      "source": "manualActions"
+    }
+  ],
+  "statusPolicy": {
+    "runningStatus": "running",
+    "stoppedStatus": "stopped",
+    "restartRequiresFreshInputs": true
+  },
+  "secrets": [],
+  "lastPublishedAt": null,
+  "config": {
+    "worldSlug": "living-kingdom-lite",
+    "sourceTemplateSlug": "living-kingdom-lite",
+    "officialTemplate": "living-kingdom-lite-v1",
+    "dataMode": "live-fantasy-fallback",
+    "runtimeFoundation": "runtime-foundation-v1",
+    "liveAutonomy": "wallet-deployed-world-contract",
+    "allocationModel": "allocationPercent_compiles_to_manifest_weights"
+  }
+}

@@ -22,8 +22,8 @@ library WorldDataOracleLib {
         WorldStateLib.Storage storage state,
         WorldTypes.WorldConfig storage config,
         bytes32 triggerId,
-        string calldata url,
-        string calldata selector,
+        string memory url,
+        string memory selector,
         uint256 cooldownSeconds,
         bytes4 callbackSelector
     ) internal returns (uint256 requestId) {
@@ -58,7 +58,7 @@ library WorldDataOracleLib {
         WorldStateLib.Storage storage state,
         WorldTypes.WorldConfig storage config,
         bytes32 triggerId,
-        bytes calldata payload,
+        bytes memory payload,
         uint256 cooldownSeconds,
         bytes4 callbackSelector
     ) internal returns (uint256 requestId) {

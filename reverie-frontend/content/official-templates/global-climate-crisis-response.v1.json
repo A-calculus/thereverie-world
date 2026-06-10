@@ -1,0 +1,959 @@
+{
+  "uiSlug": "global-climate-crisis-response",
+  "displayName": "Global Climate Crisis Response",
+  "description": "A lightweight planetary weather-response world that checks public weather JSON, updates regional zones and agency factions, and writes verifiable crisis records.",
+  "version": "climate-crisis-response-v1",
+  "engine": "genericEventWorld",
+  "publicTypes": {
+    "ClimateSeverity": [
+      "STABLE",
+      "WATCH",
+      "WARNING",
+      "EMERGENCY"
+    ],
+    "inputs": [
+      "regionId",
+      "severityThreshold",
+      "drillScenario"
+    ]
+  },
+  "inputSchema": [
+    {
+      "id": "regionId",
+      "label": "Region",
+      "type": "select",
+      "required": true,
+      "defaultValue": "europe",
+      "options": [
+        {
+          "label": "Americas Zone",
+          "value": "americas"
+        },
+        {
+          "label": "Europe Zone",
+          "value": "europe"
+        },
+        {
+          "label": "Asia-Pacific Zone",
+          "value": "asia-pacific"
+        },
+        {
+          "label": "Africa / Middle East Zone",
+          "value": "africa-middle-east"
+        }
+      ]
+    },
+    {
+      "id": "severityThreshold",
+      "label": "Severity threshold",
+      "type": "number",
+      "required": true,
+      "defaultValue": 2
+    },
+    {
+      "id": "drillScenario",
+      "label": "Manual drill scenario",
+      "type": "text",
+      "required": true,
+      "defaultValue": "Heavy rain and wind threaten transport corridors near London."
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "openMeteoEurope",
+      "name": "Open-Meteo Weather Sample",
+      "type": "weather",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=51.5072&longitude=-0.1276&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "method": "GET"
+    }
+  ],
+  "agentChain": [
+    {
+      "id": "weather-reader",
+      "name": "Weather Reader Agent",
+      "agentType": "native_json_api",
+      "purpose": "Read current weather JSON and surface temperature, wind, precipitation, and weather code.",
+      "inputTemplate": "Inspect weather data for {{runtime.inputs.regionId}}. Raw source: {{source.value}}.",
+      "persistResult": false
+    },
+    {
+      "id": "severity-assessor",
+      "name": "Severity Assessment Agent",
+      "agentType": "native_llm",
+      "purpose": "Classify regional crisis severity as STABLE, WATCH, WARNING, or EMERGENCY.",
+      "inputTemplate": "Assess crisis severity for {{runtime.inputs.regionId}} using threshold {{runtime.inputs.severityThreshold}} and previous output {{previous.output}}.",
+      "persistResult": false
+    },
+    {
+      "id": "zone-climate-update",
+      "name": "Zone Climate Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Update the selected region state with the current crisis level.",
+      "inputTemplate": "Update zone climate for {{runtime.inputs.regionId}} from {{previous.output}}.",
+      "persistResult": true
+    },
+    {
+      "id": "agency-readiness",
+      "name": "Agency Readiness Agent",
+      "agentType": "native_llm",
+      "purpose": "Update response faction readiness and coordination posture.",
+      "inputTemplate": "Map the crisis assessment into readiness changes for government, NGO, private sector, and insurance factions.",
+      "persistResult": true
+    },
+    {
+      "id": "crisis-chronicle",
+      "name": "Crisis Chronicle Agent",
+      "agentType": "reverie_custom",
+      "purpose": "Write the public crisis record with evidence and receipt context.",
+      "inputTemplate": "Write a concise Chronicle entry for the crisis assessment: {{previous.output}}.",
+      "persistResult": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "americas",
+      "name": "Americas Zone",
+      "description": "Hurricane, tornado, flood, and heat risks across major western hemisphere cities.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "government",
+        "climate": "STABLE"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "europe",
+      "name": "Europe Zone",
+      "description": "Flood, heat wave, winter storm, and transport disruption risks.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "ngo",
+        "climate": "STABLE"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "asia-pacific",
+      "name": "Asia-Pacific Zone",
+      "description": "Typhoon, monsoon, extreme rain, and coastal infrastructure risks.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "private-sector",
+        "climate": "STABLE"
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "africa-middle-east",
+      "name": "Africa / Middle East Zone",
+      "description": "Drought, extreme heat, dust storm, and flood risks.",
+      "state": {
+        "latestDecision": "pending",
+        "dangerLevel": 25,
+        "controllingFaction": "insurance",
+        "climate": "STABLE"
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "factions": [
+    {
+      "id": "government",
+      "name": "Government Faction",
+      "description": "Large resources with slower mobilization.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Government Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "ngo",
+      "name": "NGO Faction",
+      "description": "Fast response with limited capacity.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "NGO Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "private-sector",
+      "name": "Private Sector Faction",
+      "description": "Logistics, equipment, and business continuity capacity.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Private Sector Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    },
+    {
+      "id": "insurance",
+      "name": "Insurance Faction",
+      "description": "Evidence review and ledger recommendation faction.",
+      "state": {
+        "latestDecision": "pending",
+        "morale": 25,
+        "narrative": "Insurance Faction is initialized from the template manifest."
+      },
+      "allocationPercent": 25
+    }
+  ],
+  "triggers": [
+    {
+      "id": "start-climate-runtime",
+      "name": "Start Climate Monitoring Runtime",
+      "type": "data_condition",
+      "sourceId": "openMeteoEurope",
+      "condition": {
+        "isStartTrigger": true
+      },
+      "sourceConfig": {
+        "kind": "builder_input",
+        "sourceId": "regionId",
+        "path": ""
+      },
+      "typeConfig": {
+        "conditionEnabled": false,
+        "operator": "exists",
+        "compareValue": ""
+      },
+      "inputParser": "{\n  \"regionId\": \"{{runtime.inputs.regionId}}\",\n  \"severityThreshold\": \"{{runtime.inputs.severityThreshold}}\",\n  \"source\": \"{{source.value}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Crisis event log",
+          "path": "eventLog",
+          "valueTemplate": "Start Climate Monitoring Runtime completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "americas",
+          "path": "latestDecision",
+          "valueTemplate": "Start Climate Monitoring Runtime updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "government",
+          "path": "latestDecision",
+          "valueTemplate": "Start Climate Monitoring Runtime updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Start Climate Monitoring Runtime completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "weather-reader",
+        "severity-assessor",
+        "zone-climate-update",
+        "agency-readiness",
+        "crisis-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "manual-crisis-drill",
+      "name": "Manual Crisis Drill",
+      "type": "manual_action",
+      "sourceId": "openMeteoEurope",
+      "sourceConfig": {
+        "kind": "manual_payload",
+        "path": ""
+      },
+      "typeConfig": {
+        "buttonLabel": "Run Crisis Drill",
+        "description": "Run a prepared weather crisis response drill.",
+        "payloadTemplate": "{\n  \"scenario\": \"{{runtime.inputs.drillScenario}}\",\n  \"regionId\": \"{{runtime.inputs.regionId}}\"\n}"
+      },
+      "inputParser": "{\n  \"scenario\": \"{{runtime.inputs.drillScenario}}\",\n  \"payload\": \"{{trigger.payload}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Crisis event log",
+          "path": "eventLog",
+          "valueTemplate": "Manual Crisis Drill completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "europe",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Crisis Drill updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "ngo",
+          "path": "latestDecision",
+          "valueTemplate": "Manual Crisis Drill updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Manual Crisis Drill completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "severity-assessor",
+        "zone-climate-update",
+        "agency-readiness",
+        "crisis-chronicle"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "scheduled-weather-check",
+      "name": "Scheduled Weather Check",
+      "type": "scheduled",
+      "sourceId": "openMeteoEurope",
+      "sourceConfig": {
+        "kind": "data_source",
+        "sourceId": "openMeteoEurope",
+        "path": "body.current"
+      },
+      "typeConfig": {
+        "cronExpression": "*/30 * * * *",
+        "timezone": "UTC"
+      },
+      "inputParser": "{\n  \"regionId\": \"{{runtime.inputs.regionId}}\",\n  \"weather\": \"{{source.value}}\"\n}",
+      "outputMapping": [
+        {
+          "target": "event",
+          "targetId": "Crisis event log",
+          "path": "eventLog",
+          "valueTemplate": "Scheduled Weather Check completed and wrote an event log.",
+          "weightPercent": 10
+        },
+        {
+          "target": "zone",
+          "targetId": "asia-pacific",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Weather Check updated the selected zone state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "faction",
+          "targetId": "insurance",
+          "path": "latestDecision",
+          "valueTemplate": "Scheduled Weather Check updated the faction state.",
+          "weightPercent": 30
+        },
+        {
+          "target": "world_state",
+          "path": "crisisReadinessSummary",
+          "valueTemplate": "Scheduled Weather Check completed and refreshed the world summary.",
+          "weightPercent": 30
+        }
+      ],
+      "agentChain": [
+        "weather-reader",
+        "severity-assessor",
+        "agency-readiness",
+        "crisis-chronicle"
+      ],
+      "isActive": true
+    }
+  ],
+  "manualActions": [
+    {
+      "id": "run-crisis-drill",
+      "label": "Run Crisis Drill",
+      "description": "Run the configured crisis drill scenario.",
+      "triggerId": "manual-crisis-drill",
+      "ownerOnly": true
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "input:regionId",
+        "type": "input",
+        "label": "Region",
+        "refId": "regionId",
+        "position": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "input:severityThreshold",
+        "type": "input",
+        "label": "Severity threshold",
+        "refId": "severityThreshold",
+        "position": {
+          "x": 0,
+          "y": 90
+        }
+      },
+      {
+        "id": "input:drillScenario",
+        "type": "input",
+        "label": "Manual drill scenario",
+        "refId": "drillScenario",
+        "position": {
+          "x": 0,
+          "y": 180
+        }
+      },
+      {
+        "id": "data:openMeteoEurope",
+        "type": "dataSource",
+        "label": "Open-Meteo Weather Sample",
+        "refId": "openMeteoEurope",
+        "position": {
+          "x": 220,
+          "y": 0
+        }
+      },
+      {
+        "id": "trigger:start-climate-runtime",
+        "type": "trigger",
+        "label": "Start Climate Monitoring Runtime",
+        "refId": "start-climate-runtime",
+        "position": {
+          "x": 440,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:weather-reader",
+        "type": "agent",
+        "label": "Weather Reader Agent",
+        "refId": "weather-reader",
+        "position": {
+          "x": 660,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:severity-assessor",
+        "type": "agent",
+        "label": "Severity Assessment Agent",
+        "refId": "severity-assessor",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:zone-climate-update",
+        "type": "agent",
+        "label": "Zone Climate Agent",
+        "refId": "zone-climate-update",
+        "position": {
+          "x": 1020,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:agency-readiness",
+        "type": "agent",
+        "label": "Agency Readiness Agent",
+        "refId": "agency-readiness",
+        "position": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      {
+        "id": "agent:crisis-chronicle",
+        "type": "agent",
+        "label": "Crisis Chronicle Agent",
+        "refId": "crisis-chronicle",
+        "position": {
+          "x": 1380,
+          "y": 0
+        }
+      },
+      {
+        "id": "event:start-climate-runtime:0",
+        "type": "event",
+        "label": "Crisis event log",
+        "refId": "Crisis event log",
+        "position": {
+          "x": 1320,
+          "y": 0
+        }
+      },
+      {
+        "id": "zone:americas",
+        "type": "zone",
+        "label": "Americas Zone",
+        "refId": "americas",
+        "position": {
+          "x": 1320,
+          "y": 42
+        }
+      },
+      {
+        "id": "faction:government",
+        "type": "faction",
+        "label": "Government Faction",
+        "refId": "government",
+        "position": {
+          "x": 1320,
+          "y": 84
+        }
+      },
+      {
+        "id": "world_state:crisisReadinessSummary",
+        "type": "event",
+        "label": "crisisReadinessSummary",
+        "refId": "crisisReadinessSummary",
+        "position": {
+          "x": 1320,
+          "y": 126
+        }
+      },
+      {
+        "id": "trigger:manual-crisis-drill",
+        "type": "trigger",
+        "label": "Manual Crisis Drill",
+        "refId": "manual-crisis-drill",
+        "position": {
+          "x": 440,
+          "y": 120
+        }
+      },
+      {
+        "id": "event:manual-crisis-drill:0",
+        "type": "event",
+        "label": "Crisis event log",
+        "refId": "Crisis event log",
+        "position": {
+          "x": 1320,
+          "y": 120
+        }
+      },
+      {
+        "id": "zone:europe",
+        "type": "zone",
+        "label": "Europe Zone",
+        "refId": "europe",
+        "position": {
+          "x": 1320,
+          "y": 162
+        }
+      },
+      {
+        "id": "faction:ngo",
+        "type": "faction",
+        "label": "NGO Faction",
+        "refId": "ngo",
+        "position": {
+          "x": 1320,
+          "y": 204
+        }
+      },
+      {
+        "id": "trigger:scheduled-weather-check",
+        "type": "trigger",
+        "label": "Scheduled Weather Check",
+        "refId": "scheduled-weather-check",
+        "position": {
+          "x": 440,
+          "y": 240
+        }
+      },
+      {
+        "id": "event:scheduled-weather-check:0",
+        "type": "event",
+        "label": "Crisis event log",
+        "refId": "Crisis event log",
+        "position": {
+          "x": 1320,
+          "y": 240
+        }
+      },
+      {
+        "id": "zone:asia-pacific",
+        "type": "zone",
+        "label": "Asia-Pacific Zone",
+        "refId": "asia-pacific",
+        "position": {
+          "x": 1320,
+          "y": 282
+        }
+      },
+      {
+        "id": "faction:insurance",
+        "type": "faction",
+        "label": "Insurance Faction",
+        "refId": "insurance",
+        "position": {
+          "x": 1320,
+          "y": 324
+        }
+      },
+      {
+        "id": "zone:africa-middle-east",
+        "type": "zone",
+        "label": "Africa / Middle East Zone",
+        "refId": "africa-middle-east",
+        "position": {
+          "x": 1320,
+          "y": 600
+        }
+      },
+      {
+        "id": "faction:private-sector",
+        "type": "faction",
+        "label": "Private Sector Faction",
+        "refId": "private-sector",
+        "position": {
+          "x": 1540,
+          "y": 520
+        }
+      },
+      {
+        "id": "world_state:aggregate",
+        "type": "event",
+        "label": "World state",
+        "refId": "world",
+        "position": {
+          "x": 1760,
+          "y": 420
+        }
+      },
+      {
+        "id": "action:run-crisis-drill",
+        "type": "manualAction",
+        "label": "Run Crisis Drill",
+        "refId": "run-crisis-drill",
+        "position": {
+          "x": 220,
+          "y": 420
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge:openMeteoEurope:start-climate-runtime",
+        "source": "data:openMeteoEurope",
+        "target": "trigger:start-climate-runtime",
+        "label": "data_condition",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-climate-runtime:step:0",
+        "source": "trigger:start-climate-runtime",
+        "target": "agent:weather-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-climate-runtime:step:1",
+        "source": "agent:weather-reader",
+        "target": "agent:severity-assessor",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-climate-runtime:step:2",
+        "source": "agent:severity-assessor",
+        "target": "agent:zone-climate-update",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-climate-runtime:step:3",
+        "source": "agent:zone-climate-update",
+        "target": "agent:agency-readiness",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-climate-runtime:step:4",
+        "source": "agent:agency-readiness",
+        "target": "agent:crisis-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:start-climate-runtime:output:0",
+        "source": "agent:crisis-chronicle",
+        "target": "event:start-climate-runtime:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:start-climate-runtime:output:1",
+        "source": "agent:crisis-chronicle",
+        "target": "zone:americas",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-climate-runtime:output:2",
+        "source": "agent:crisis-chronicle",
+        "target": "faction:government",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:start-climate-runtime:output:3",
+        "source": "agent:crisis-chronicle",
+        "target": "world_state:crisisReadinessSummary",
+        "label": "crisisReadinessSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:openMeteoEurope:manual-crisis-drill",
+        "source": "data:openMeteoEurope",
+        "target": "trigger:manual-crisis-drill",
+        "label": "manual_action",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-crisis-drill:step:0",
+        "source": "trigger:manual-crisis-drill",
+        "target": "agent:severity-assessor",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-crisis-drill:step:1",
+        "source": "agent:severity-assessor",
+        "target": "agent:zone-climate-update",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-crisis-drill:step:2",
+        "source": "agent:zone-climate-update",
+        "target": "agent:agency-readiness",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-crisis-drill:step:3",
+        "source": "agent:agency-readiness",
+        "target": "agent:crisis-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:manual-crisis-drill:output:0",
+        "source": "agent:crisis-chronicle",
+        "target": "event:manual-crisis-drill:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:manual-crisis-drill:output:1",
+        "source": "agent:crisis-chronicle",
+        "target": "zone:europe",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-crisis-drill:output:2",
+        "source": "agent:crisis-chronicle",
+        "target": "faction:ngo",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:manual-crisis-drill:output:3",
+        "source": "agent:crisis-chronicle",
+        "target": "world_state:crisisReadinessSummary",
+        "label": "crisisReadinessSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:openMeteoEurope:scheduled-weather-check",
+        "source": "data:openMeteoEurope",
+        "target": "trigger:scheduled-weather-check",
+        "label": "scheduled",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-weather-check:step:0",
+        "source": "trigger:scheduled-weather-check",
+        "target": "agent:weather-reader",
+        "label": "starts",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-weather-check:step:1",
+        "source": "agent:weather-reader",
+        "target": "agent:severity-assessor",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-weather-check:step:2",
+        "source": "agent:severity-assessor",
+        "target": "agent:agency-readiness",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-weather-check:step:3",
+        "source": "agent:agency-readiness",
+        "target": "agent:crisis-chronicle",
+        "label": "then",
+        "weightPercent": 100
+      },
+      {
+        "id": "edge:scheduled-weather-check:output:0",
+        "source": "agent:crisis-chronicle",
+        "target": "event:scheduled-weather-check:0",
+        "label": "eventLog",
+        "weightPercent": 10
+      },
+      {
+        "id": "edge:scheduled-weather-check:output:1",
+        "source": "agent:crisis-chronicle",
+        "target": "zone:asia-pacific",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-weather-check:output:2",
+        "source": "agent:crisis-chronicle",
+        "target": "faction:insurance",
+        "label": "latestDecision",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:scheduled-weather-check:output:3",
+        "source": "agent:crisis-chronicle",
+        "target": "world_state:crisisReadinessSummary",
+        "label": "crisisReadinessSummary",
+        "weightPercent": 30
+      },
+      {
+        "id": "edge:zone:americas:faction:government",
+        "source": "zone:americas",
+        "target": "faction:government",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:europe:faction:ngo",
+        "source": "zone:europe",
+        "target": "faction:ngo",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:asia-pacific:faction:private-sector",
+        "source": "zone:asia-pacific",
+        "target": "faction:private-sector",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:zone:africa-middle-east:faction:insurance",
+        "source": "zone:africa-middle-east",
+        "target": "faction:insurance",
+        "label": "influences",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:government:world",
+        "source": "faction:government",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:ngo:world",
+        "source": "faction:ngo",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:private-sector:world",
+        "source": "faction:private-sector",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:faction:insurance:world",
+        "source": "faction:insurance",
+        "target": "world_state:aggregate",
+        "label": "world effect",
+        "weightPercent": 25
+      },
+      {
+        "id": "edge:action:run-crisis-drill:manual-crisis-drill",
+        "source": "action:run-crisis-drill",
+        "target": "trigger:manual-crisis-drill",
+        "label": "manual start",
+        "weightPercent": 100
+      }
+    ]
+  },
+  "runtimeLayout": [
+    {
+      "id": "crisis-summary",
+      "title": "Crisis Summary",
+      "kind": "summary",
+      "source": "latestRun.summary"
+    },
+    {
+      "id": "world-graph",
+      "title": "World Graph",
+      "kind": "graph",
+      "source": "graph"
+    },
+    {
+      "id": "agent-responses",
+      "title": "Agent Responses",
+      "kind": "agent_response",
+      "source": "latestRun.agentResponses"
+    },
+    {
+      "id": "event-log",
+      "title": "Live Events",
+      "kind": "event_log",
+      "source": "events"
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts",
+      "kind": "receipt_list",
+      "source": "latestRun.receipts"
+    },
+    {
+      "id": "manual-actions",
+      "title": "Manual Actions",
+      "kind": "manual_actions",
+      "source": "manualActions"
+    }
+  ],
+  "statusPolicy": {
+    "runningStatus": "running",
+    "stoppedStatus": "stopped",
+    "restartRequiresFreshInputs": true
+  },
+  "secrets": [],
+  "lastPublishedAt": null,
+  "config": {
+    "worldSlug": "global-climate-crisis-response",
+    "sourceTemplateSlug": "global-climate-crisis-response",
+    "officialTemplate": "climate-crisis-response-v1",
+    "dataMode": "public-weather-json",
+    "runtimeFoundation": "runtime-foundation-v1",
+    "liveAutonomy": "wallet-deployed-world-contract",
+    "allocationModel": "allocationPercent_compiles_to_manifest_weights"
+  }
+}

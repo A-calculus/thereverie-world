@@ -1,0 +1,476 @@
+{
+  "uiSlug": "cargo-climate-guard",
+  "displayName": "Cargo Climate Guard",
+  "description": "Autonomous voyage guard that plans a cargo route, projects the ship position every two hours, checks live weather, decides continue/reroute/wait/arrived/stop, records receipts, and schedules the next voyage tick from Somnia reactivity.",
+  "version": "cargo-autonomous-template-v2",
+  "engine": "genericEventWorld",
+  "publicTypes": {
+    "CargoGuardDecision": ["continue", "reroute", "wait_next_day", "arrived", "stop"],
+    "inputs": ["startPortId", "destinationPortId", "speedKnots"]
+  },
+  "inputSchema": [
+    {
+      "id": "startPortId",
+      "label": "Start port",
+      "type": "select",
+      "required": true,
+      "defaultValue": "shanghai",
+      "options": [
+        { "label": "Shanghai", "value": "shanghai" },
+        { "label": "Singapore", "value": "singapore" },
+        { "label": "Rotterdam", "value": "rotterdam" },
+        { "label": "Los Angeles", "value": "los-angeles" },
+        { "label": "New York", "value": "new-york" },
+        { "label": "Jebel Ali", "value": "jebel-ali" },
+        { "label": "Mumbai", "value": "mumbai" },
+        { "label": "Lagos", "value": "lagos" },
+        { "label": "Santos", "value": "santos" },
+        { "label": "Sydney", "value": "sydney" },
+        { "label": "Cape Town", "value": "cape-town" },
+        { "label": "Busan", "value": "busan" },
+        { "label": "Tokyo", "value": "tokyo" },
+        { "label": "Hamburg", "value": "hamburg" }
+      ]
+    },
+    {
+      "id": "destinationPortId",
+      "label": "Destination port",
+      "type": "select",
+      "required": true,
+      "defaultValue": "rotterdam",
+      "options": [
+        { "label": "Shanghai", "value": "shanghai" },
+        { "label": "Singapore", "value": "singapore" },
+        { "label": "Rotterdam", "value": "rotterdam" },
+        { "label": "Los Angeles", "value": "los-angeles" },
+        { "label": "New York", "value": "new-york" },
+        { "label": "Jebel Ali", "value": "jebel-ali" },
+        { "label": "Mumbai", "value": "mumbai" },
+        { "label": "Lagos", "value": "lagos" },
+        { "label": "Santos", "value": "santos" },
+        { "label": "Sydney", "value": "sydney" },
+        { "label": "Cape Town", "value": "cape-town" },
+        { "label": "Busan", "value": "busan" },
+        { "label": "Tokyo", "value": "tokyo" },
+        { "label": "Hamburg", "value": "hamburg" }
+      ]
+    },
+    {
+      "id": "speedKnots",
+      "label": "Ship speed in knots",
+      "type": "number",
+      "required": true,
+      "defaultValue": 18
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "routeGraph",
+      "name": "Bundled cargo route graph",
+      "type": "route_graph",
+      "url": "/api/demo/cargo-climate/routes",
+      "method": "GET"
+    },
+    {
+      "id": "routePlan",
+      "name": "Best route and alternatives",
+      "type": "route_plan",
+      "url": "/api/demo/cargo-climate/route-plan?startPortId={{runtime.inputs.startPortId}}&destinationPortId={{runtime.inputs.destinationPortId}}&speedKnots={{runtime.inputs.speedKnots}}&alternatives=true",
+      "method": "GET"
+    },
+    {
+      "id": "routeProgress",
+      "name": "Two-hour voyage projection",
+      "type": "route_progress",
+      "url": "/api/demo/cargo-climate/progress?startPortId={{runtime.inputs.startPortId}}&destinationPortId={{runtime.inputs.destinationPortId}}&speedKnots={{runtime.inputs.speedKnots}}&hours=2",
+      "method": "GET"
+    },
+    {
+      "id": "weatherSample",
+      "name": "Projected-position weather sample",
+      "type": "weather",
+      "url": "/api/demo/cargo-climate/weather-sample?lat={{dataSources.routeProgress.body.progress.projectedPosition.latitude}}&lon={{dataSources.routeProgress.body.progress.projectedPosition.longitude}}&hourOffset=2",
+      "method": "GET"
+    }
+  ],
+  "agentChain": [
+    {
+      "id": "route-planner",
+      "agentId": "route-planner",
+      "name": "Route Planner Agent",
+      "agentType": "native_llm",
+      "purpose": "Select the best route and alternatives from the bundled route graph.",
+      "inputTemplate": "Task: Choose the best cargo route from origin to destination using the bundled route graph and current voyage state. Return compact JSON only with routeId, routeName, ports, alternatives, reason, confidence, and nextAction.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nRoute graph: {{dataSources.routeGraph.body}}\nRoute plan: {{dataSources.routePlan.body}}\nTrigger payload: {{trigger.payload}}\nPrevious step result: {{previous.output}}",
+      "systemPrompt": "You are the REVERIE Cargo Route Planner. Return only compact valid JSON. Do not use markdown.",
+      "resultAlias": "routePlanDecision",
+      "persistResult": true
+    },
+    {
+      "id": "position-projector",
+      "agentId": "position-projector",
+      "name": "Position Projector Agent",
+      "agentType": "native_llm",
+      "purpose": "Project the ship position two hours ahead on the selected route.",
+      "inputTemplate": "Task: Use the route plan, selected route, current position, and speed to calculate the projected cargo position in two hours. Return compact JSON only with activeRouteId, currentSegment, currentPosition, projectedPosition, nextStopId, distanceTravelledNm, distanceRemainingNm, etaHours, arrivalProgress, and nextCheckAt.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nRoute progress service: {{dataSources.routeProgress.body}}\nRoute plan decision: {{previous.output}}\nTrigger payload: {{trigger.payload}}",
+      "systemPrompt": "You are the REVERIE Cargo Position Projector. Return only compact valid JSON. Do not use markdown.",
+      "resultAlias": "positionProjection",
+      "persistResult": true
+    },
+    {
+      "id": "weather-sampler",
+      "agentId": "weather-sampler",
+      "name": "Weather JSON Agent",
+      "agentType": "native_json_api",
+      "purpose": "Fetch live weather at the projected two-hour ship coordinate.",
+      "urlTemplate": "https://api.open-meteo.com/v1/forecast?latitude={{dataSources.routeProgress.body.progress.projectedPosition.latitude}}&longitude={{dataSources.routeProgress.body.progress.projectedPosition.longitude}}&current=temperature_2m,wind_speed_10m,precipitation,weather_code",
+      "selector": "current",
+      "resultAlias": "projectedWeather",
+      "persistResult": true
+    },
+    {
+      "id": "weather-risk",
+      "agentId": "weather-risk",
+      "name": "Weather Risk Agent",
+      "agentType": "native_llm",
+      "purpose": "Decide whether the current route segment is safe, risky, or blocked from weather and route evidence.",
+      "inputTemplate": "Task: Evaluate weather safety for the projected position and current route segment. Return compact JSON only with status, decision, confidence, weatherRisk, segmentRisk, summary, stateEffect, and nextAction. decision must be one of continue, reroute, wait_next_day, arrived, stop.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nProjection: {{agents.position-projector.output}}\nWeather JSON: {{previous.output}}\nRoute plan: {{dataSources.routePlan.body}}\nTrigger payload: {{trigger.payload}}",
+      "systemPrompt": "You are the REVERIE Cargo Weather Risk Agent. Return only compact valid JSON. Do not use markdown.",
+      "resultAlias": "weatherRiskDecision",
+      "persistResult": true
+    },
+    {
+      "id": "route-decision",
+      "agentId": "route-decision",
+      "name": "Route Decision Agent",
+      "agentType": "native_llm",
+      "purpose": "Choose continue, reroute, wait next day, arrived, or stop from all accumulated voyage evidence.",
+      "inputTemplate": "Task: Make the authoritative voyage decision. Return compact JSON only with decision as the first key, then activeRouteId, currentPosition, nextStopId, attemptedRouteIds, nextCheckAt, arrivalProgress, weather, summary, and stateEffects. decision must be exactly one of continue, reroute, wait_next_day, arrived, stop.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nRoute plan: {{dataSources.routePlan.body}}\nProjection: {{agents.position-projector.output}}\nWeather risk: {{previous.output}}\nTrigger payload: {{trigger.payload}}",
+      "systemPrompt": "You are the REVERIE Cargo Decision Agent. The decision field controls on-chain continuation. Return only compact valid JSON with decision as the first key, no markdown, and no spaces around JSON colons.",
+      "resultAlias": "voyageDecision",
+      "persistResult": true
+    },
+    {
+      "id": "chronicle-state",
+      "agentId": "chronicle-state",
+      "name": "Chronicle and State Agent",
+      "agentType": "native_llm",
+      "purpose": "Summarize the final voyage decision and state effects for the live world.",
+      "inputTemplate": "Task: Write one concise receipt-backed voyage chronicle entry from the final decision. Return compact JSON only with chronicle, voyageStatus, zoneEffect, factionEffect, and proofSummary.",
+      "contextTemplate": "Runtime inputs: {{runtime.inputs}}\nFinal decision: {{previous.output}}\nRoute plan: {{dataSources.routePlan.body}}\nWeather sample: {{dataSources.weatherSample.body}}",
+      "systemPrompt": "You are the REVERIE Cargo Chronicle Agent. Return only compact valid JSON. Do not use markdown.",
+      "resultAlias": "chronicleState",
+      "persistResult": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "pacific-corridor",
+      "name": "Pacific Corridor",
+      "description": "Pacific and East Asia cargo lane weather exposure.",
+      "allocationPercent": 20,
+      "state": { "dangerLevel": 20, "controllingFaction": "safety-authority", "climate": "CALM", "narrative": "Pacific lane initialized." }
+    },
+    {
+      "id": "indian-ocean-corridor",
+      "name": "Indian Ocean Corridor",
+      "description": "Indian Ocean and South Asia cargo lane weather exposure.",
+      "allocationPercent": 20,
+      "state": { "dangerLevel": 25, "controllingFaction": "carrier-operations", "climate": "CALM", "narrative": "Indian Ocean lane initialized." }
+    },
+    {
+      "id": "suez-red-sea-corridor",
+      "name": "Suez Red Sea Corridor",
+      "description": "Suez, Red Sea, and chokepoint risk corridor.",
+      "allocationPercent": 20,
+      "state": { "dangerLevel": 30, "controllingFaction": "port-network", "climate": "WATCH", "narrative": "Suez and Red Sea lane initialized." }
+    },
+    {
+      "id": "atlantic-corridor",
+      "name": "Atlantic Corridor",
+      "description": "Atlantic and European final-approach cargo lane weather exposure.",
+      "allocationPercent": 20,
+      "state": { "dangerLevel": 22, "controllingFaction": "cargo-owner", "climate": "CALM", "narrative": "Atlantic lane initialized." }
+    },
+    {
+      "id": "port-corridor-network",
+      "name": "Port Corridor Network",
+      "description": "Port calls, intermediate stops, and route handoff state.",
+      "allocationPercent": 20,
+      "state": { "dangerLevel": 18, "controllingFaction": "port-network", "climate": "CALM", "narrative": "Port network initialized." }
+    }
+  ],
+  "factions": [
+    {
+      "id": "safety-authority",
+      "name": "Safety Authority",
+      "description": "Prioritizes weather safety and stop/wait decisions.",
+      "allocationPercent": 30,
+      "state": { "morale": 70, "narrative": "Safety authority monitoring route risk." }
+    },
+    {
+      "id": "carrier-operations",
+      "name": "Carrier Operations",
+      "description": "Optimizes route continuity and ETA.",
+      "allocationPercent": 25,
+      "state": { "morale": 68, "narrative": "Carrier operations ready for autonomous rerouting." }
+    },
+    {
+      "id": "cargo-owner",
+      "name": "Cargo Owner",
+      "description": "Tracks delivery confidence and cargo exposure.",
+      "allocationPercent": 25,
+      "state": { "morale": 64, "narrative": "Cargo owner awaits route proof." }
+    },
+    {
+      "id": "port-network",
+      "name": "Port Network",
+      "description": "Coordinates intermediate stops and corridor capacity.",
+      "allocationPercent": 20,
+      "state": { "morale": 66, "narrative": "Port network watching corridor handoffs." }
+    }
+  ],
+  "triggers": [
+    {
+      "id": "manual-start-route",
+      "name": "Manual Start Route",
+      "type": "manual_action",
+      "agentChain": ["route-planner", "position-projector", "weather-sampler", "weather-risk", "route-decision", "chronicle-state"],
+      "isActive": true,
+      "isStartTrigger": true,
+      "condition": { "isStartTrigger": true },
+      "sourceConfig": { "kind": "data_source", "sourceId": "routeProgress", "path": "body.progress", "includeInAgentInput": true },
+      "typeConfig": {
+        "buttonLabel": "Start voyage",
+        "description": "Owner starts an autonomous cargo voyage from selected ports and speed.",
+        "payloadTemplate": "{\"voyage\":{\"status\":\"active\",\"origin\":\"{{runtime.inputs.startPortId}}\",\"destination\":\"{{runtime.inputs.destinationPortId}}\",\"speedKnots\":\"{{runtime.inputs.speedKnots}}\"},\"routePlan\":{{dataSources.routePlan.body.routePlan}},\"progress\":{{dataSources.routeProgress.body.progress}},\"weather\":{{dataSources.weatherSample.body.weather}},\"source\":{{source.value}}}",
+        "decisionContinuations": [
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"reroute\"", "nextTriggerId": "decision-reroute" },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"continue\"", "nextTriggerId": "decision-continue" },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"wait_next_day\"", "terminal": true },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"arrived\"", "terminal": true },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"stop\"", "terminal": true }
+        ]
+      },
+      "inputParser": "{\"voyage\":{\"status\":\"active\",\"origin\":\"{{runtime.inputs.startPortId}}\",\"destination\":\"{{runtime.inputs.destinationPortId}}\",\"speedKnots\":\"{{runtime.inputs.speedKnots}}\"},\"routePlan\":{{dataSources.routePlan.body.routePlan}},\"progress\":{{dataSources.routeProgress.body.progress}},\"weather\":{{dataSources.weatherSample.body.weather}},\"source\":{{source.value}}}",
+      "cooldownMs": 0,
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.latestDecision", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 },
+        { "target": "world_state", "path": "voyage.status", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 },
+        { "target": "zone", "targetId": "port-corridor-network", "path": "voyage", "valueTemplate": "{{previous.output}}", "priorityPercent": 40 },
+        { "target": "faction", "targetId": "safety-authority", "path": "narrative", "valueTemplate": "{{previous.output}}", "priorityPercent": 40 },
+        { "target": "event", "targetId": "cargo-voyage-event", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    },
+    {
+      "id": "scheduled-voyage-tick",
+      "name": "Scheduled Voyage Tick",
+      "type": "scheduled",
+      "agentChain": ["position-projector", "weather-sampler", "weather-risk", "route-decision", "chronicle-state"],
+      "isActive": true,
+      "sourceConfig": { "kind": "data_source", "sourceId": "routeProgress", "path": "body.progress", "includeInAgentInput": true },
+      "typeConfig": {
+        "cronExpression": "0 */2 * * *",
+        "timezone": "UTC",
+        "payloadTemplate": "{\"voyage\":{\"status\":\"active\",\"origin\":\"{{runtime.inputs.startPortId}}\",\"destination\":\"{{runtime.inputs.destinationPortId}}\",\"speedKnots\":\"{{runtime.inputs.speedKnots}}\"},\"routePlan\":{{dataSources.routePlan.body.routePlan}},\"progress\":{{dataSources.routeProgress.body.progress}},\"weather\":{{dataSources.weatherSample.body.weather}},\"scheduled\":true}",
+        "decisionContinuations": [
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"reroute\"", "nextTriggerId": "decision-reroute" },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"continue\"", "nextTriggerId": "decision-continue" },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"wait_next_day\"", "terminal": true },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"arrived\"", "terminal": true },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"stop\"", "terminal": true }
+        ]
+      },
+      "inputParser": "{\"voyage\":{\"status\":\"active\",\"origin\":\"{{runtime.inputs.startPortId}}\",\"destination\":\"{{runtime.inputs.destinationPortId}}\",\"speedKnots\":\"{{runtime.inputs.speedKnots}}\"},\"routePlan\":{{dataSources.routePlan.body.routePlan}},\"progress\":{{dataSources.routeProgress.body.progress}},\"weather\":{{dataSources.weatherSample.body.weather}},\"scheduled\":true}",
+      "cooldownMs": 7200000,
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.latestDecision", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 },
+        { "target": "zone", "targetId": "suez-red-sea-corridor", "path": "climateState", "valueTemplate": "{{previous.output}}", "priorityPercent": 35 },
+        { "target": "faction", "targetId": "carrier-operations", "path": "narrative", "valueTemplate": "{{previous.output}}", "priorityPercent": 30 },
+        { "target": "event", "targetId": "cargo-voyage-tick", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    },
+    {
+      "id": "decision-continue",
+      "name": "Decision Continue State",
+      "type": "data_condition",
+      "agentChain": [],
+      "isActive": true,
+      "sourceConfig": { "kind": "runtime_state", "path": "voyage.latestDecision", "includeInAgentInput": true },
+      "typeConfig": { "operator": "contains", "compareValue": "\"decision\":\"continue\"" },
+      "cooldownMs": 7200000,
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.status", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 },
+        { "target": "event", "targetId": "cargo-continue", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    },
+    {
+      "id": "decision-reroute",
+      "name": "Decision Reroute",
+      "type": "data_condition",
+      "agentChain": ["route-planner", "position-projector", "weather-sampler", "weather-risk", "route-decision", "chronicle-state"],
+      "isActive": true,
+      "sourceConfig": { "kind": "runtime_state", "path": "voyage.latestDecision", "includeInAgentInput": true },
+      "typeConfig": {
+        "operator": "contains",
+        "compareValue": "\"decision\":\"reroute\"",
+        "decisionContinuations": [
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"reroute\"", "nextTriggerId": "decision-reroute" },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"continue\"", "nextTriggerId": "decision-continue" },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"wait_next_day\"", "terminal": true },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"arrived\"", "terminal": true },
+          { "matchPath": "decision", "matchValue": "{\"decision\":\"stop\"", "terminal": true }
+        ]
+      },
+      "cooldownMs": 300000,
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.attemptedRouteIds", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 },
+        { "target": "zone", "targetId": "port-corridor-network", "path": "reroute", "valueTemplate": "{{previous.output}}", "priorityPercent": 50 },
+        { "target": "faction", "targetId": "port-network", "path": "narrative", "valueTemplate": "{{previous.output}}", "priorityPercent": 30 },
+        { "target": "event", "targetId": "cargo-reroute", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    },
+    {
+      "id": "decision-wait-next-day",
+      "name": "Decision Wait Next Day",
+      "type": "data_condition",
+      "agentChain": [],
+      "isActive": true,
+      "sourceConfig": { "kind": "runtime_state", "path": "voyage.latestDecision", "includeInAgentInput": true },
+      "typeConfig": { "operator": "contains", "compareValue": "\"decision\":\"wait_next_day\"" },
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.status", "valueTemplate": "paused_until_next_day", "priorityPercent": 100 },
+        { "target": "event", "targetId": "cargo-wait", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    },
+    {
+      "id": "decision-arrived",
+      "name": "Decision Arrived",
+      "type": "data_condition",
+      "agentChain": [],
+      "isActive": true,
+      "sourceConfig": { "kind": "runtime_state", "path": "voyage.latestDecision", "includeInAgentInput": true },
+      "typeConfig": { "operator": "contains", "compareValue": "\"decision\":\"arrived\"" },
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.status", "valueTemplate": "arrived", "priorityPercent": 100 },
+        { "target": "event", "targetId": "cargo-arrived", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    },
+    {
+      "id": "decision-stop",
+      "name": "Decision Stop",
+      "type": "data_condition",
+      "agentChain": [],
+      "isActive": true,
+      "sourceConfig": { "kind": "runtime_state", "path": "voyage.latestDecision", "includeInAgentInput": true },
+      "typeConfig": { "operator": "contains", "compareValue": "\"decision\":\"stop\"" },
+      "outputMapping": [
+        { "target": "world_state", "path": "voyage.status", "valueTemplate": "stopped", "priorityPercent": 100 },
+        { "target": "event", "targetId": "cargo-stopped", "path": "chronicle", "valueTemplate": "{{previous.output}}", "priorityPercent": 100 }
+      ]
+    }
+  ],
+  "manualActions": [
+    {
+      "id": "start-voyage",
+      "label": "Start voyage",
+      "description": "Start the autonomous cargo voyage loop from the selected route inputs.",
+      "triggerId": "manual-start-route",
+      "ownerOnly": true,
+      "inputOverrides": { "startPortId": "shanghai", "destinationPortId": "rotterdam", "speedKnots": 18 }
+    }
+  ],
+  "runtimeLayout": [
+    { "id": "voyage-state", "title": "Voyage State", "kind": "summary", "source": "world_state.voyage" },
+    { "id": "agent-requests", "title": "Agent Requests", "kind": "agent_response", "source": "runtime.agentRequests" },
+    { "id": "receipts", "title": "Receipts", "kind": "receipt_list", "source": "runtime.receipts" },
+    { "id": "timeline", "title": "Live Timeline", "kind": "timeline", "source": "runtime.timeline" }
+  ],
+  "graph": {
+    "nodes": [
+      { "id": "input:startPortId", "type": "input", "label": "Start Port", "refId": "startPortId" },
+      { "id": "input:destinationPortId", "type": "input", "label": "Destination", "refId": "destinationPortId" },
+      { "id": "input:speedKnots", "type": "input", "label": "Speed", "refId": "speedKnots" },
+      { "id": "dataSource:routeGraph", "type": "dataSource", "label": "Route Graph", "refId": "routeGraph" },
+      { "id": "dataSource:routePlan", "type": "dataSource", "label": "Route Plan", "refId": "routePlan" },
+      { "id": "dataSource:routeProgress", "type": "dataSource", "label": "2h Progress", "refId": "routeProgress" },
+      { "id": "dataSource:weatherSample", "type": "dataSource", "label": "Weather", "refId": "weatherSample" },
+      { "id": "trigger:manual-start-route", "type": "trigger", "label": "Manual Start", "refId": "manual-start-route" },
+      { "id": "trigger:scheduled-voyage-tick", "type": "trigger", "label": "2h Tick", "refId": "scheduled-voyage-tick" },
+      { "id": "agent:route-planner", "type": "agent", "label": "Route Planner", "refId": "route-planner" },
+      { "id": "agent:position-projector", "type": "agent", "label": "Position Projector", "refId": "position-projector" },
+      { "id": "agent:weather-sampler", "type": "agent", "label": "Weather JSON", "refId": "weather-sampler" },
+      { "id": "agent:weather-risk", "type": "agent", "label": "Weather Risk", "refId": "weather-risk" },
+      { "id": "agent:route-decision", "type": "agent", "label": "Route Decision", "refId": "route-decision" },
+      { "id": "agent:chronicle-state", "type": "agent", "label": "Chronicle State", "refId": "chronicle-state" },
+      { "id": "zone:port-corridor-network", "type": "zone", "label": "Port Network", "refId": "port-corridor-network" },
+      { "id": "faction:safety-authority", "type": "faction", "label": "Safety Authority", "refId": "safety-authority" },
+      { "id": "event:cargo-voyage-event", "type": "event", "label": "Voyage Event", "refId": "cargo-voyage-event" }
+    ],
+    "edges": [
+      { "id": "edge:inputs:manual", "source": "input:startPortId", "target": "trigger:manual-start-route", "label": "origin", "weightPercent": 34 },
+      { "id": "edge:destination:manual", "source": "input:destinationPortId", "target": "trigger:manual-start-route", "label": "destination", "weightPercent": 33 },
+      { "id": "edge:speed:manual", "source": "input:speedKnots", "target": "trigger:manual-start-route", "label": "speed", "weightPercent": 33 },
+      { "id": "edge:route-graph:planner", "source": "dataSource:routeGraph", "target": "agent:route-planner", "label": "graph", "weightPercent": 100 },
+      { "id": "edge:route-plan:planner", "source": "dataSource:routePlan", "target": "agent:route-planner", "label": "alternatives", "weightPercent": 100 },
+      { "id": "edge:planner:projector", "source": "agent:route-planner", "target": "agent:position-projector", "label": "route", "weightPercent": 100 },
+      { "id": "edge:progress:projector", "source": "dataSource:routeProgress", "target": "agent:position-projector", "label": "projection", "weightPercent": 100 },
+      { "id": "edge:projector:weather", "source": "agent:position-projector", "target": "agent:weather-sampler", "label": "coordinate", "weightPercent": 100 },
+      { "id": "edge:weather:risk", "source": "agent:weather-sampler", "target": "agent:weather-risk", "label": "weather", "weightPercent": 100 },
+      { "id": "edge:risk:decision", "source": "agent:weather-risk", "target": "agent:route-decision", "label": "risk", "weightPercent": 100 },
+      { "id": "edge:decision:chronicle", "source": "agent:route-decision", "target": "agent:chronicle-state", "label": "decision", "weightPercent": 100 },
+      { "id": "edge:chronicle:zone", "source": "agent:chronicle-state", "target": "zone:port-corridor-network", "label": "state effect", "weightPercent": 50 },
+      { "id": "edge:chronicle:faction", "source": "agent:chronicle-state", "target": "faction:safety-authority", "label": "stakeholder", "weightPercent": 30 },
+      { "id": "edge:chronicle:event", "source": "agent:chronicle-state", "target": "event:cargo-voyage-event", "label": "receipt", "weightPercent": 20 }
+    ]
+  },
+  "config": {
+    "worldSlug": "cargo-climate-guard",
+    "sourceTemplateSlug": "cargo-climate-guard",
+    "routeSourceVersion": "cargo-routes-v2",
+    "liveRequirements": {
+      "dataSources": [
+        { "id": "routeGraph", "label": "Bundled cargo route graph", "resolvedHttpUrl": true },
+        { "id": "routePlan", "label": "Best route and alternatives", "resolvedHttpUrl": true },
+        { "id": "routeProgress", "label": "Two-hour voyage projection", "resolvedHttpUrl": true },
+        { "id": "weatherSample", "label": "Projected-position weather sample", "resolvedHttpUrl": true }
+      ],
+      "resolvedPaths": [
+        { "path": "dataSources.routeProgress.body.progress.projectedPosition.latitude", "label": "Projected latitude" },
+        { "path": "dataSources.routeProgress.body.progress.projectedPosition.longitude", "label": "Projected longitude" }
+      ],
+      "agentSteps": [
+        { "id": "weather-sampler", "label": "Weather JSON Agent", "requiredUrlQueryParams": ["latitude", "longitude"] }
+      ],
+      "triggers": [
+        { "id": "manual-start-route", "label": "Manual start route", "requiresDecisionContinuations": true },
+        { "id": "scheduled-voyage-tick", "label": "Scheduled voyage tick", "requiresDecisionContinuations": true },
+        { "id": "decision-reroute", "label": "Decision reroute", "requiresDecisionContinuations": true }
+      ]
+    },
+    "voyageStatePaths": [
+      "voyage.status",
+      "voyage.origin",
+      "voyage.destination",
+      "voyage.speedKnots",
+      "voyage.activeRouteId",
+      "voyage.attemptedRouteIds",
+      "voyage.currentPosition",
+      "voyage.nextStop",
+      "voyage.nextCheckAt",
+      "voyage.weather",
+      "voyage.latestDecision",
+      "voyage.arrivalProgress"
+    ]
+  },
+  "statusPolicy": {
+    "runningStatus": "running",
+    "stoppedStatus": "stopped",
+    "restartRequiresFreshInputs": true
+  },
+  "secrets": [],
+  "lastPublishedAt": null
+}
